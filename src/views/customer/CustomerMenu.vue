@@ -1,5 +1,6 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { Info, ShoppingCart } from '@lucide/vue'
 import ChatPanel from '../../components/ChatPanel.vue'
 import MobileNav from '../../components/MobileNav.vue'
@@ -11,6 +12,7 @@ import { categories } from '../../data/mockData'
 import { useAppState } from '../../services/appState'
 
 const { state, cartItems, addToCart, t } = useAppState()
+const route = useRoute()
 const selectedItem = ref(null)
 const search = ref('')
 const detailQty = ref(1)
@@ -28,6 +30,14 @@ const filteredItems = computed(() => state.menuItems.filter((item) => {
   const text = [item.name, item.description, ...item.ingredients, ...item.dietaryTags, ...item.tasteProfiles].join(' ').toLowerCase()
   return categoryMatch && text.includes(search.value.toLowerCase())
 }))
+
+watch(
+  () => route.query.category,
+  (category) => {
+    if (categories.includes(category)) state.selectedCategory = category
+  },
+  { immediate: true },
+)
 
 function openDetail(item) {
   selectedItem.value = item
