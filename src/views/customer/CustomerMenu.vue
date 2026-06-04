@@ -53,7 +53,7 @@ function addSelected() {
 
 <template>
   <div class="page-shell">
-    <TopBar :cart-count="cartItems.length" />
+    <TopBar v-model="search" :cart-count="cartItems.length" />
     <div class="content-shell">
       <SideNav :items="navItems" bottom-label="Checkout" />
       <main class="main-panel">

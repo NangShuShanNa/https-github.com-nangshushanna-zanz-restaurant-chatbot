@@ -6,9 +6,12 @@ import { useAppState } from '../services/appState'
 
 defineProps({
   cartCount: { type: Number, default: 0 },
+  modelValue: { type: String, default: '' },
   searchPlaceholder: { type: String, default: 'Search dishes, ingredients, or taste' },
   owner: { type: Boolean, default: false },
 })
+
+defineEmits(['update:modelValue'])
 
 const { state, toggleLanguage, t } = useAppState()
 const showAccountMenu = ref(false)
@@ -48,7 +51,12 @@ const accountActions = computed(() => {
     <AppLogo />
     <label class="ml-auto flex h-11 min-w-0 flex-1 max-w-xl items-center gap-3 rounded-full bg-pale px-4 text-sm text-muted">
       <Search :size="18" />
-      <input class="min-w-0 flex-1 bg-transparent outline-none" :placeholder="t(searchPlaceholder)" />
+      <input
+        class="min-w-0 flex-1 bg-transparent outline-none"
+        :value="modelValue"
+        :placeholder="t(searchPlaceholder)"
+        @input="$emit('update:modelValue', $event.target.value)"
+      />
     </label>
     <button class="hidden items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold text-stone-700 transition hover:bg-pale sm:flex" @click="toggleLanguage">
       <Globe2 :size="20" />
