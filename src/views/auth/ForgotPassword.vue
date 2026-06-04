@@ -29,7 +29,7 @@ const sent = ref(false)
           <input v-model="email" class="field mt-2" placeholder="name@zank.com" type="email" />
         </label>
         <button class="primary-btn w-full">Send Reset Link</button>
-        <p v-if="sent" class="rounded-2xl bg-pale px-4 py-3 text-sm font-bold text-brand">Reset link sent. Please check your email.</p>
+        <p v-if="sent" class="rounded-2xl bg-pale px-4 py-3 text-sm font-bold text-brand">If this email is registered, reset instructions will be sent.</p>
       </form>
 
       <div class="mt-6 flex justify-between text-sm font-bold text-brand">
