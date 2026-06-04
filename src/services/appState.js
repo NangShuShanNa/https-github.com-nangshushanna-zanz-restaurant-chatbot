@@ -2,11 +2,24 @@ import { computed, reactive } from 'vue'
 import { menuItemsSeed, ordersSeed, usersSeed } from '../data/mockData'
 
 const serviceFee = 30
+const menuStorageKey = 'zank-menu-items'
+
+function readStoredMenuItems() {
+  try {
+    return JSON.parse(localStorage.getItem(menuStorageKey)) || structuredClone(menuItemsSeed)
+  } catch {
+    return structuredClone(menuItemsSeed)
+  }
+}
+
+function persistMenuItems() {
+  localStorage.setItem(menuStorageKey, JSON.stringify(state.menuItems))
+}
 
 const state = reactive({
   activeUser: JSON.parse(localStorage.getItem('zank-active-user') || 'null'),
   language: localStorage.getItem('zank-language') || 'en',
-  menuItems: structuredClone(menuItemsSeed),
+  menuItems: readStoredMenuItems(),
   orders: structuredClone(ordersSeed),
   users: structuredClone(usersSeed),
   cart: [
@@ -205,15 +218,19 @@ export function useAppState() {
     }
     if (existingIndex >= 0) state.menuItems[existingIndex] = normalized
     else state.menuItems.unshift(normalized)
+    persistMenuItems()
+    return normalized
   }
 
   function deleteMenuItem(id) {
     state.menuItems = state.menuItems.filter((item) => item.id !== id)
+    persistMenuItems()
   }
 
   function toggleAvailability(id) {
     const item = state.menuItems.find((entry) => entry.id === id)
     if (item) item.availability = item.availability === 'available' ? 'sold_out' : 'available'
+    persistMenuItems()
   }
 
   function addStaffAccount(staff) {

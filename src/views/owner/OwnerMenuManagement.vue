@@ -1,6 +1,6 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
-import { Plus, Trash2 } from '@lucide/vue'
+import { Pencil, Plus, Trash2 } from '@lucide/vue'
 import MobileNav from '../../components/MobileNav.vue'
 import SideNav from '../../components/SideNav.vue'
 import StatusPill from '../../components/StatusPill.vue'
@@ -35,7 +35,7 @@ watch(selected, (item) => item && load(item), { immediate: true })
 const complete = computed(() => form.name && form.category && form.price && form.ingredientsText && form.tasteText && form.availability)
 
 function submit() {
-  saveMenuItem({
+  const savedItem = saveMenuItem({
     id: form.id,
     name: form.name,
     category: form.category,
@@ -49,6 +49,7 @@ function submit() {
     spiceLevel: form.spiceLevel,
     availability: form.availability,
   })
+  load(savedItem)
 }
 
 function addNew() {
@@ -66,6 +67,12 @@ function addNew() {
     spiceLevel: 'None',
     availability: 'available',
   })
+}
+
+function removeItem(item) {
+  deleteMenuItem(item.id)
+  const nextItem = state.menuItems[0]
+  if (nextItem) load(nextItem)
 }
 </script>
 
@@ -86,15 +93,29 @@ function addNew() {
         <section class="grid gap-6 xl:grid-cols-[1fr_420px]">
           <article class="section-card overflow-hidden">
             <div class="divide-y divide-stone-100">
-              <button v-for="item in state.menuItems" :key="item.id" class="grid w-full gap-4 p-5 text-left hover:bg-pale lg:grid-cols-[80px_1.2fr_.7fr_.7fr_1fr_.6fr_auto] lg:items-center" @click="load(item)">
+              <article
+                v-for="item in state.menuItems"
+                :key="item.id"
+                class="grid cursor-pointer gap-4 p-5 transition hover:bg-pale lg:grid-cols-[80px_1.2fr_.7fr_.7fr_1fr_auto] lg:items-center"
+                :class="selected?.id === item.id ? 'bg-pale ring-2 ring-brand/20' : ''"
+                @click="load(item)"
+              >
                 <img :src="item.image" :alt="item.name" class="h-20 w-20 rounded-2xl object-cover" />
                 <div><strong>{{ item.name }}</strong><p class="text-sm text-muted">{{ item.category }}</p></div>
                 <span class="font-bold text-brand">{{ item.price }} Baht</span>
                 <StatusPill :status="item.availability" />
                 <TagList :tags="[...item.tasteProfiles.slice(0, 1), ...item.allergens.slice(0, 1).map(a => `Contains ${a}`)]" />
-                <span class="text-sm font-bold text-brand">Edit</span>
-                <Trash2 :size="18" class="text-red-500" @click.stop="deleteMenuItem(item.id)" />
-              </button>
+                <div class="flex flex-wrap gap-2">
+                  <button class="secondary-btn inline-flex items-center gap-2 py-2 text-sm" @click.stop="load(item)">
+                    <Pencil :size="16" />
+                    Edit
+                  </button>
+                  <button class="rounded-full border border-red-100 px-4 py-2 text-sm font-bold text-red-600 transition hover:bg-red-50" @click.stop="removeItem(item)">
+                    <Trash2 :size="16" class="inline" />
+                    Delete
+                  </button>
+                </div>
+              </article>
             </div>
           </article>
 
