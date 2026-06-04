@@ -1,5 +1,5 @@
 <script setup>
-import { Eye, Lock, Mail, ShieldCheck } from '@lucide/vue'
+import { Eye, EyeOff, Lock, Mail, ShieldCheck } from '@lucide/vue'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AppLogo from '../../components/AppLogo.vue'
@@ -13,6 +13,7 @@ const router = useRouter()
 const { signIn } = useAppState()
 const email = ref(props.type === 'owner' ? 'admin@zank.com' : 'kitchen@zank.com')
 const password = ref('')
+const showPassword = ref(false)
 const showError = ref(false)
 
 const title = computed(() => props.type === 'owner' ? 'Admin Login' : 'Staff Login')
@@ -66,8 +67,17 @@ function submit() {
           </span>
           <span class="mt-2 flex items-center gap-2 rounded-2xl border border-stone-200 px-4 py-3">
             <Lock :size="18" class="text-muted" />
-            <input v-model="password" class="w-full outline-none" type="password" />
-            <Eye :size="18" class="text-muted" />
+            <input v-model="password" class="w-full outline-none" :type="showPassword ? 'text' : 'password'" />
+            <button
+              type="button"
+              class="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted transition hover:bg-pale hover:text-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
+              :aria-label="showPassword ? 'Hide password' : 'Show password'"
+              :title="showPassword ? 'Hide password' : 'Show password'"
+              @click="showPassword = !showPassword"
+            >
+              <EyeOff v-if="showPassword" :size="18" />
+              <Eye v-else :size="18" />
+            </button>
           </span>
         </label>
         <p v-if="showError" class="text-sm font-semibold text-red-600">Invalid email or password.</p>
