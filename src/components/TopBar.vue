@@ -54,7 +54,13 @@ const accountActions = computed(() => {
       <Globe2 :size="20" />
       <span>{{ state.language === 'en' ? 'EN / TH' : 'TH / EN' }}</span>
     </button>
-    <RouterLink v-if="!owner" to="/customer/cart" class="relative rounded-full p-2 transition hover:bg-pale" :aria-label="state.language === 'en' ? 'Open cart' : 'เปิดตะกร้า'">
+    <RouterLink
+      v-if="!owner"
+      to="/customer/cart"
+      class="relative z-30 inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-stone-900 transition hover:bg-pale focus:outline-none focus:ring-2 focus:ring-brand/40"
+      :aria-label="state.language === 'en' ? 'Open cart' : 'เปิดตะกร้า'"
+      :title="state.language === 'en' ? 'Open cart' : 'เปิดตะกร้า'"
+    >
       <ShoppingCart :size="25" />
       <span v-if="cartCount" class="absolute -right-2 -top-2 grid h-5 w-5 place-items-center rounded-full bg-brand text-xs font-bold text-white">{{ cartCount }}</span>
     </RouterLink>
