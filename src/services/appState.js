@@ -6,9 +6,24 @@ const menuStorageKey = 'zank-menu-items'
 const cartStorageKey = 'zank-cart-items'
 const orderStorageKey = 'zank-orders'
 
+function normalizeMenuItem(item) {
+  const seedItem = menuItemsSeed.find((entry) => entry.id === item.id) || {}
+  return {
+    ...seedItem,
+    ...item,
+    nameTh: item.nameTh ?? seedItem.nameTh ?? '',
+    descriptionTh: item.descriptionTh ?? seedItem.descriptionTh ?? '',
+    ingredientsTh: item.ingredientsTh ?? seedItem.ingredientsTh ?? [],
+    allergensTh: item.allergensTh ?? seedItem.allergensTh ?? [],
+    dietaryTagsTh: item.dietaryTagsTh ?? seedItem.dietaryTagsTh ?? [],
+    tasteProfilesTh: item.tasteProfilesTh ?? seedItem.tasteProfilesTh ?? [],
+  }
+}
+
 function readStoredMenuItems() {
   try {
-    return JSON.parse(localStorage.getItem(menuStorageKey)) || structuredClone(menuItemsSeed)
+    const storedItems = JSON.parse(localStorage.getItem(menuStorageKey))
+    return (storedItems || structuredClone(menuItemsSeed)).map(normalizeMenuItem)
   } catch {
     return structuredClone(menuItemsSeed)
   }
@@ -219,6 +234,7 @@ export function useAppState() {
       items: cartItems.value.map((item) => ({
         menuItemId: item.id,
         name: item.name,
+        nameTh: item.nameTh,
         quantity: item.quantity,
         price: item.price,
         note: item.note,
@@ -247,11 +263,11 @@ export function useAppState() {
 
   function saveMenuItem(item) {
     const existingIndex = state.menuItems.findIndex((entry) => entry.id === item.id)
-    const normalized = {
+    const normalized = normalizeMenuItem({
       ...item,
       id: item.id || item.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
       price: Number(item.price || 0),
-    }
+    })
     if (existingIndex >= 0) state.menuItems[existingIndex] = normalized
     else state.menuItems.unshift(normalized)
     persistMenuItems()
@@ -315,6 +331,20 @@ export function useAppState() {
     return translations[state.language]?.[value] || value
   }
 
+  function localizeMenuItem(item) {
+    if (!item) return item
+    const useThai = state.language === 'th'
+    return {
+      ...item,
+      displayName: useThai && item.nameTh ? item.nameTh : item.name,
+      displayDescription: useThai && item.descriptionTh ? item.descriptionTh : item.description,
+      displayIngredients: useThai && item.ingredientsTh?.length ? item.ingredientsTh : item.ingredients,
+      displayAllergens: useThai && item.allergensTh?.length ? item.allergensTh : item.allergens,
+      displayDietaryTags: useThai && item.dietaryTagsTh?.length ? item.dietaryTagsTh : item.dietaryTags,
+      displayTasteProfiles: useThai && item.tasteProfilesTh?.length ? item.tasteProfilesTh : item.tasteProfiles,
+    }
+  }
+
   function recommend(query) {
     const lower = query.toLowerCase()
     const matches = availableMenuItems.value.filter((item) => {
@@ -355,6 +385,7 @@ export function useAppState() {
     signOut,
     toggleLanguage,
     t,
+    localizeMenuItem,
     recommend,
   }
 }

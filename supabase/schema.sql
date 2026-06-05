@@ -41,14 +41,20 @@ create table if not exists public.profiles (
 create table if not exists public.menu_items (
   id uuid primary key default gen_random_uuid(),
   name text not null,
+  name_th text not null default '',
   description text not null,
+  description_th text not null default '',
   category text not null check (category in ('Starters', 'Main Courses', 'Drinks')),
   price numeric(10, 2) not null check (price >= 0),
   image_url text not null,
   ingredients text[] not null default '{}',
+  ingredients_th text[] not null default '{}',
   allergens text[] not null default '{}',
+  allergens_th text[] not null default '{}',
   dietary_tags text[] not null default '{}',
+  dietary_tags_th text[] not null default '{}',
   taste_profile_tags text[] not null default '{}',
+  taste_profile_tags_th text[] not null default '{}',
   spice_level text not null default 'None',
   availability_status menu_availability not null default 'available',
   metadata_complete boolean generated always as (
@@ -62,6 +68,13 @@ create table if not exists public.menu_items (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.menu_items add column if not exists name_th text not null default '';
+alter table public.menu_items add column if not exists description_th text not null default '';
+alter table public.menu_items add column if not exists ingredients_th text[] not null default '{}';
+alter table public.menu_items add column if not exists allergens_th text[] not null default '{}';
+alter table public.menu_items add column if not exists dietary_tags_th text[] not null default '{}';
+alter table public.menu_items add column if not exists taste_profile_tags_th text[] not null default '{}';
 
 create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),

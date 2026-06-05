@@ -1,6 +1,6 @@
 export const categories = ['Starters', 'Main Courses', 'Drinks']
 
-export const menuItemsSeed = [
+const menuItems = [
   {
     id: 'mushroom-soup',
     name: 'Mushroom Soup',
@@ -422,6 +422,79 @@ export const menuItemsSeed = [
     availability: 'available',
   },
 ]
+
+const thaiMenuContent = {
+  'mushroom-soup': ['ซุปเห็ด', 'ซุปเห็ดครีมรสกลมกล่อม เสิร์ฟพร้อมสมุนไพรและขนมปังกระเทียมกรอบ'],
+  bruschetta: ['บรูสเก็ตตามะเขือเทศโหระพา', 'ขนมปังปิ้งหน้ามะเขือเทศ โหระพา กระเทียม น้ำมันมะกอก และซอสบัลซามิก'],
+  'caesar-salad': ['ซีซาร์สลัด', 'ผักโรเมนกรอบ พาร์เมซาน ขนมปังกรอบ และน้ำสลัดซีซาร์'],
+  'caprese-skewers': ['คาเปรเซ่เสียบไม้', 'มอสซาเรลลา มะเขือเทศเชอร์รี โหระพา และซอสบัลซามิก'],
+  'spicy-edamame': ['ถั่วแระญี่ปุ่นรสเผ็ด', 'ถั่วแระญี่ปุ่นนึ่งคลุกซอสพริกกระเทียมและเกลือทะเล'],
+  'crispy-calamari': ['ปลาหมึกทอดกรอบ', 'ปลาหมึกชุบแป้งทอด เสิร์ฟพร้อมเลมอนและซอสสมุนไพร'],
+  'truffle-fries': ['เฟรนช์ฟรายส์ทรัฟเฟิลพาร์เมซาน', 'เฟรนช์ฟรายส์กรอบคลุกน้ำมันทรัฟเฟิล พาร์เมซาน และพาร์สลีย์'],
+  'thai-papaya-salad': ['ส้มตำไทย', 'มะละกอดิบคลุกมะนาว พริก มะเขือเทศ และถั่วลิสง'],
+  'garlic-bread': ['ขนมปังกระเทียม', 'ขนมปังปิ้งกับเนยกระเทียม พาร์สลีย์ และเกลือทะเล'],
+  'halloumi-pear-salad': ['สลัดฮัลลูมีและลูกแพร์', 'ฮัลลูมีย่างกับผักสด ลูกแพร์ ถั่วอบ และซอสบัลซามิก'],
+  'arrabbiata-tagliatelle': ['ตาลยาเตลเล่อาราเบียตตา', 'พาสต้าเส้นสดกับซอสมะเขือเทศรสเผ็ด พริก กระเทียม และโหระพา'],
+  'chicken-pesto-pasta': ['พาสต้าไก่เพสโต', 'เพนเน่กับไก่ย่าง ซอสเพสโต พาร์เมซาน และมะเขือเทศเชอร์รี'],
+  'truffle-risotto': ['ริซอตโตเห็ดทรัฟเฟิล', 'ริซอตโตเนื้อครีมกับเห็ด น้ำมันทรัฟเฟิล พาร์เมซาน และสมุนไพร'],
+  'thai-basil-chicken': ['ข้าวกะเพราไก่', 'ไก่ผัดกะเพรา พริก กระเทียม เสิร์ฟพร้อมข้าวหอมมะลิ'],
+  'vegetable-curry': ['แกงเขียวหวานผัก', 'แกงเขียวหวานกะทิกับผักรวม เสิร์ฟพร้อมข้าวสวย'],
+  'beef-burger': ['เบอร์เกอร์เนื้อคลาสสิก', 'เนื้อบด เชดดาร์ ผักกาด มะเขือเทศ หอมใหญ่ และซอสสูตรของร้าน'],
+  'herb-salmon': ['แซลมอนอบสมุนไพร', 'แซลมอนย่างเคลือบสมุนไพร เสิร์ฟพร้อมผักอบและเนยเลมอน'],
+  'shrimp-pad-thai': ['ผัดไทยกุ้ง', 'เส้นจันท์ผัดกุ้ง ซอสมะขาม ไข่ ถั่วงอก และถั่วลิสง'],
+  'vegan-buddha-bowl': ['วีแกนบุดดาโบวล์', 'ควินัว อะโวคาโด ถั่วลูกไก่ ผักอบ และน้ำสลัดทาฮินี'],
+  'bbq-pork-ribs': ['ซี่โครงหมูบาร์บีคิว', 'ซี่โครงหมูตุ๋นนุ่มกับซอสบาร์บีคิวรมควันและสลัดกะหล่ำ'],
+  'lime-mint-sparkle': ['มะนาวมินต์โซดา', 'เครื่องดื่มมะนาวรสเปรี้ยวสดชื่นกับมินต์และโซดา'],
+  'thai-iced-tea': ['ชาไทยเย็น', 'ชาไทยรสหวานกับนมและน้ำแข็งบด'],
+  'iced-americano': ['อเมริกาโนเย็น', 'เอสเปรสโซผสมน้ำเย็นและน้ำแข็ง'],
+  'strawberry-lemonade': ['สตรอว์เบอร์รีเลมอนเนด', 'เลมอนเนดสดผสมสตรอว์เบอร์รีและมินต์'],
+  'cucumber-cooler': ['แตงกวาคูลเลอร์', 'แตงกวา มะนาว มินต์ และโซดา'],
+  'passionfruit-soda': ['เสาวรสโซดา', 'เครื่องดื่มเสาวรสซ่ากับมะนาวและน้ำแข็ง'],
+  'mango-smoothie': ['มะม่วงสมูทตี', 'มะม่วงปั่นกับโยเกิร์ต น้ำผึ้ง และน้ำแข็ง'],
+  'matcha-latte': ['มัทฉะลาเต้เย็น', 'มัทฉะญี่ปุ่นกับนม ความหวานเล็กน้อย และน้ำแข็ง'],
+  'watermelon-fizz': ['แตงโมฟิซซ์', 'น้ำแตงโมกับมะนาว โซดา และมินต์สด'],
+  'hot-jasmine-tea': ['ชามะลิร้อน', 'ชามะลิหอมกรุ่นเสิร์ฟร้อน'],
+}
+
+const thaiTerms = {
+  mushroom: 'เห็ด', cream: 'ครีม', garlic: 'กระเทียม', onion: 'หอมใหญ่', herbs: 'สมุนไพร',
+  bread: 'ขนมปัง', tomato: 'มะเขือเทศ', basil: 'โหระพา', 'olive oil': 'น้ำมันมะกอก', balsamic: 'บัลซามิก',
+  'romaine lettuce': 'ผักโรเมน', parmesan: 'พาร์เมซาน', croutons: 'ขนมปังกรอบ', 'caesar dressing': 'น้ำสลัดซีซาร์',
+  mozzarella: 'มอสซาเรลลา', 'cherry tomato': 'มะเขือเทศเชอร์รี', edamame: 'ถั่วแระญี่ปุ่น', chili: 'พริก',
+  'sea salt': 'เกลือทะเล', calamari: 'ปลาหมึก', flour: 'แป้ง', lemon: 'เลมอน', 'herb aioli': 'ซอสสมุนไพร',
+  potato: 'มันฝรั่ง', 'truffle oil': 'น้ำมันทรัฟเฟิล', parsley: 'พาร์สลีย์', 'green papaya': 'มะละกอดิบ',
+  lime: 'มะนาว', peanuts: 'ถั่วลิสง', butter: 'เนย', halloumi: 'ฮัลลูมี', pear: 'ลูกแพร์',
+  'mixed greens': 'ผักสลัดรวม', nuts: 'ถั่ว', pasta: 'พาสต้า', chicken: 'ไก่', 'basil pesto': 'ซอสเพสโต',
+  'arborio rice': 'ข้าวอาร์โบริโอ', 'green curry': 'แกงเขียวหวาน', 'coconut milk': 'กะทิ',
+  eggplant: 'มะเขือ', 'bamboo shoot': 'หน่อไม้', rice: 'ข้าว', beef: 'เนื้อวัว', bun: 'ขนมปังเบอร์เกอร์',
+  cheddar: 'เชดดาร์', lettuce: 'ผักกาด', salmon: 'แซลมอน', vegetables: 'ผัก', 'rice noodles': 'เส้นจันท์',
+  shrimp: 'กุ้ง', tamarind: 'มะขาม', egg: 'ไข่', 'bean sprouts': 'ถั่วงอก', quinoa: 'ควินัว',
+  avocado: 'อะโวคาโด', chickpeas: 'ถั่วลูกไก่', tahini: 'ทาฮินี', 'pork ribs': 'ซี่โครงหมู',
+  'bbq sauce': 'ซอสบาร์บีคิว', cabbage: 'กะหล่ำปลี', carrot: 'แครอท', mint: 'มินต์',
+  'sparkling water': 'น้ำโซดา', sugar: 'น้ำตาล', 'thai tea': 'ชาไทย', milk: 'นม', ice: 'น้ำแข็ง',
+  espresso: 'เอสเปรสโซ', water: 'น้ำ', strawberry: 'สตรอว์เบอร์รี', cucumber: 'แตงกวา',
+  passionfruit: 'เสาวรส', soda: 'โซดา', mango: 'มะม่วง', yogurt: 'โยเกิร์ต', honey: 'น้ำผึ้ง',
+  matcha: 'มัทฉะ', watermelon: 'แตงโม', 'jasmine tea': 'ชามะลิ',
+}
+
+const thaiTags = {
+  Dairy: 'ผลิตภัณฑ์นม', Gluten: 'กลูเตน', Egg: 'ไข่', Soy: 'ถั่วเหลือง', Shellfish: 'อาหารทะเลเปลือกแข็ง',
+  Nuts: 'ถั่ว', 'Fish Sauce': 'น้ำปลา', Fish: 'ปลา', Sesame: 'งา', Vegetarian: 'มังสวิรัติ',
+  Vegan: 'วีแกน', 'High Protein': 'โปรตีนสูง', Light: 'เบา', Savory: 'กลมกล่อม', Mild: 'รสอ่อน',
+  Fresh: 'สดชื่น', Spicy: 'เผ็ด', Crispy: 'กรอบ', Herby: 'หอมสมุนไพร', Creamy: 'ครีมมี่',
+  Rich: 'เข้มข้น', Sweet: 'หวาน', Sour: 'เปรี้ยว', Smoky: 'รมควัน', Refreshing: 'สดชื่น',
+  Bitter: 'ขม', Earthy: 'หอมชา', Floral: 'หอมดอกไม้',
+}
+
+export const menuItemsSeed = menuItems.map((item) => ({
+  ...item,
+  nameTh: thaiMenuContent[item.id]?.[0] || item.name,
+  descriptionTh: thaiMenuContent[item.id]?.[1] || item.description,
+  ingredientsTh: item.ingredients.map((value) => thaiTerms[value] || value),
+  allergensTh: item.allergens.map((value) => thaiTags[value] || value),
+  dietaryTagsTh: item.dietaryTags.map((value) => thaiTags[value] || value),
+  tasteProfilesTh: item.tasteProfiles.map((value) => thaiTags[value] || value),
+}))
 
 export const usersSeed = [
   { id: 'owner-1', fullName: 'ZANK Owner', email: 'admin@zank.com', password: 'admin123', role: 'owner', status: 'active', lastLogin: 'Today 12:20 PM' },

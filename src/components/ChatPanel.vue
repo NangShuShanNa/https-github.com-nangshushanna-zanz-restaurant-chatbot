@@ -3,14 +3,14 @@ import { Bot, Send } from '@lucide/vue'
 import { ref } from 'vue'
 import { useAppState } from '../services/appState'
 
-const { recommend, addToCart, t } = useAppState()
+const { recommend, addToCart, localizeMenuItem, t } = useAppState()
 const input = ref('')
 const messages = ref([
   { role: 'bot', text: "Hello! I'm Chef AI. I can help you find dishes by taste, ingredients, or dietary preference." },
 ])
 
 function reply(text) {
-  const matches = recommend(text)
+  const matches = recommend(text).map(localizeMenuItem)
   if (text.toLowerCase().includes('status')) {
     messages.value.push({ role: 'bot', text: 'You can enter your order number on the Check Order Status page to see the latest status.' })
     return
@@ -18,7 +18,7 @@ function reply(text) {
   if (matches.length) {
     messages.value.push({
       role: 'bot',
-      text: `I found ${matches.length} option${matches.length > 1 ? 's' : ''}: ${matches.map((item) => item.name).join(', ')}. These match your menu data and are currently available.`,
+      text: `I found ${matches.length} option${matches.length > 1 ? 's' : ''}: ${matches.map((item) => item.displayName).join(', ')}. These match your menu data and are currently available.`,
       items: matches,
     })
   } else {
@@ -59,7 +59,7 @@ function send(text = input.value) {
             @click="addToCart(item.id)"
           >
             <span>
-              <strong class="block">{{ item.name }}</strong>
+              <strong class="block">{{ item.displayName }}</strong>
               <small>{{ item.price }} {{ t('Baht') }}</small>
             </span>
             <span class="rounded-full bg-brand px-3 py-1 text-xs font-bold text-white">{{ t('Add') }}</span>

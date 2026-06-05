@@ -11,7 +11,7 @@ import TopBar from '../../components/TopBar.vue'
 import { categories } from '../../data/mockData'
 import { useAppState } from '../../services/appState'
 
-const { state, cartItems, addToCart, t } = useAppState()
+const { state, cartItems, addToCart, localizeMenuItem, t } = useAppState()
 const route = useRoute()
 const selectedItem = ref(null)
 const search = ref('')
@@ -25,9 +25,20 @@ const navItems = [
   { label: 'Check Order Status', to: '/customer/order-status', short: 'Status' },
 ]
 
-const filteredItems = computed(() => state.menuItems.filter((item) => {
+const filteredItems = computed(() => state.menuItems.map(localizeMenuItem).filter((item) => {
   const categoryMatch = item.category === state.selectedCategory
-  const text = [item.name, item.description, ...item.ingredients, ...item.dietaryTags, ...item.tasteProfiles].join(' ').toLowerCase()
+  const text = [
+    item.name,
+    item.nameTh,
+    item.description,
+    item.descriptionTh,
+    ...item.ingredients,
+    ...(item.ingredientsTh || []),
+    ...item.dietaryTags,
+    ...(item.dietaryTagsTh || []),
+    ...item.tasteProfiles,
+    ...(item.tasteProfilesTh || []),
+  ].join(' ').toLowerCase()
   return categoryMatch && text.includes(search.value.toLowerCase())
 }))
 
@@ -91,14 +102,14 @@ function addSelected() {
                 class="section-card flex h-full flex-col overflow-hidden transition hover:-translate-y-1 hover:shadow-strong"
               >
                 <button class="flex flex-1 flex-col text-left" @click="openDetail(item)">
-                  <img :src="item.image" :alt="item.name" class="h-48 w-full object-cover" />
+                  <img :src="item.image" :alt="item.displayName" class="h-48 w-full object-cover" />
                   <div class="flex flex-1 flex-col p-5">
                     <div class="flex items-start justify-between gap-3">
-                      <h2 class="min-h-12 font-black leading-snug">{{ item.name }}</h2>
+                      <h2 class="min-h-12 font-black leading-snug">{{ item.displayName }}</h2>
                       <strong class="whitespace-nowrap text-brand">{{ item.price }} {{ t('Baht') }}</strong>
                     </div>
-                    <p class="mt-3 min-h-16 text-sm leading-relaxed text-muted">{{ item.description }}</p>
-                    <TagList class="mt-4 min-h-16" :tags="[...item.tasteProfiles.slice(0, 1), ...item.dietaryTags.slice(0, 1), ...item.allergens.slice(0, 1).map(a => `Contains ${a}`)]" />
+                    <p class="mt-3 min-h-16 text-sm leading-relaxed text-muted">{{ item.displayDescription }}</p>
+                    <TagList class="mt-4 min-h-16" :tags="[...item.displayTasteProfiles.slice(0, 1), ...item.displayDietaryTags.slice(0, 1), ...item.displayAllergens.slice(0, 1).map(a => `Contains ${a}`)]" />
                   </div>
                 </button>
                 <div class="mt-auto flex items-center justify-between gap-3 px-5 pb-5">
@@ -122,18 +133,18 @@ function addSelected() {
 
     <div v-if="selectedItem" class="fixed inset-0 z-50 grid place-items-center bg-black/30 p-4">
       <section class="grid max-h-[92vh] w-full max-w-4xl overflow-auto rounded-[2rem] bg-white shadow-strong md:grid-cols-[360px_1fr]">
-        <img :src="selectedItem.image" :alt="selectedItem.name" class="h-72 w-full object-cover md:h-full" />
+        <img :src="selectedItem.image" :alt="selectedItem.displayName" class="h-72 w-full object-cover md:h-full" />
         <div class="p-6 md:p-8">
           <button class="float-right text-2xl font-bold text-muted" @click="selectedItem = null">×</button>
-          <h2 class="text-3xl font-black">{{ selectedItem.name }}</h2>
+          <h2 class="text-3xl font-black">{{ selectedItem.displayName }}</h2>
           <p class="mt-1 text-xl font-black text-brand">{{ selectedItem.price }} {{ t('Baht') }}</p>
-          <p class="mt-4 leading-relaxed text-muted">{{ selectedItem.description }}</p>
-          <TagList class="mt-4" :tags="[...selectedItem.tasteProfiles, ...selectedItem.dietaryTags, ...selectedItem.allergens.map(a => `Contains ${a}`)]" />
+          <p class="mt-4 leading-relaxed text-muted">{{ selectedItem.displayDescription }}</p>
+          <TagList class="mt-4" :tags="[...selectedItem.displayTasteProfiles, ...selectedItem.displayDietaryTags, ...selectedItem.displayAllergens.map(a => `Contains ${a}`)]" />
           <div class="mt-6 grid gap-4 text-sm sm:grid-cols-2">
-            <div><strong>{{ t('Ingredients') }}</strong><p class="text-muted">{{ selectedItem.ingredients.join(', ') }}</p></div>
-            <div><strong>{{ t('Taste profile') }}</strong><p class="text-muted">{{ selectedItem.tasteProfiles.map(t).join(', ') }}</p></div>
+            <div><strong>{{ t('Ingredients') }}</strong><p class="text-muted">{{ selectedItem.displayIngredients.join(', ') }}</p></div>
+            <div><strong>{{ t('Taste profile') }}</strong><p class="text-muted">{{ selectedItem.displayTasteProfiles.map(t).join(', ') }}</p></div>
             <div><strong>{{ t('Spice level') }}</strong><p class="text-muted">{{ t(selectedItem.spiceLevel) }}</p></div>
-            <div><strong>{{ t('Allergens') }}</strong><p class="text-muted">{{ selectedItem.allergens.length ? selectedItem.allergens.map(t).join(', ') : t('None') }}</p></div>
+            <div><strong>{{ t('Allergens') }}</strong><p class="text-muted">{{ selectedItem.displayAllergens.length ? selectedItem.displayAllergens.map(t).join(', ') : t('None') }}</p></div>
             <div><strong>{{ t('Availability') }}</strong><p class="capitalize text-muted">{{ t(selectedItem.availability) }}</p></div>
           </div>
           <div class="mt-6 flex flex-wrap items-center gap-4">

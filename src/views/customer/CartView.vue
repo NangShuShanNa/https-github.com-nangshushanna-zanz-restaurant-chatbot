@@ -11,7 +11,7 @@ import ChatPanel from '../../components/ChatPanel.vue'
 import { useAppState } from '../../services/appState'
 
 const router = useRouter()
-const { state, cartItems, subtotal, total, serviceFee, conflictItems, updateCartItem, removeFromCart, createOrder } = useAppState()
+const { state, cartItems, subtotal, total, serviceFee, conflictItems, updateCartItem, removeFromCart, createOrder, localizeMenuItem } = useAppState()
 const tableNumber = ref('T-24')
 const customerNote = ref('')
 const noteDrafts = reactive({})
@@ -25,6 +25,7 @@ const navItems = [
 ]
 
 const conflictsById = computed(() => Object.fromEntries(conflictItems.value.map((item) => [item.id, true])))
+const localizedCartItems = computed(() => cartItems.value.map(localizeMenuItem))
 
 watch(
   cartItems,
@@ -65,15 +66,15 @@ function submitOrder() {
             </p>
 
             <div class="mt-6 space-y-4">
-              <article v-for="item in cartItems" :key="item.id" class="section-card grid gap-4 p-4 md:grid-cols-[140px_1fr_auto]">
-                <img :src="item.image" :alt="item.name" class="h-32 w-full rounded-2xl object-cover md:w-36" />
+              <article v-for="item in localizedCartItems" :key="item.id" class="section-card grid gap-4 p-4 md:grid-cols-[140px_1fr_auto]">
+                <img :src="item.image" :alt="item.displayName" class="h-32 w-full rounded-2xl object-cover md:w-36" />
                 <div>
                   <div class="flex flex-wrap justify-between gap-3">
-                    <h2 class="text-xl font-black">{{ item.name }}</h2>
+                    <h2 class="text-xl font-black">{{ item.displayName }}</h2>
                     <strong class="text-brand">{{ item.price }} Baht</strong>
                   </div>
-                  <p class="mt-2 text-sm text-muted">{{ item.description }}</p>
-                  <TagList class="mt-3" :tags="[...item.tasteProfiles.slice(0, 1), ...item.dietaryTags.slice(0, 1), ...item.allergens.map(a => `Contains ${a}`).slice(0, 1)]" />
+                  <p class="mt-2 text-sm text-muted">{{ item.displayDescription }}</p>
+                  <TagList class="mt-3" :tags="[...item.displayTasteProfiles.slice(0, 1), ...item.displayDietaryTags.slice(0, 1), ...item.displayAllergens.map(a => `Contains ${a}`).slice(0, 1)]" />
                   <div v-if="conflictsById[item.id]" class="mt-3 rounded-2xl bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-800">
                     Warning: This item contains {{ item.allergens.join(', ') }}.
                     <button class="ml-3 font-black text-red-600" @click="removeFromCart(item.id)">Remove</button>

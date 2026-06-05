@@ -17,6 +17,10 @@ const navItems = [
   { label: 'Drinks', to: '/customer/menu' },
   { label: 'Check Order Status', to: '/customer/order-status', short: 'Status' },
 ]
+
+function itemName(item) {
+  return state.language === 'th' && item.nameTh ? item.nameTh : item.name
+}
 </script>
 
 <template>
@@ -48,7 +52,7 @@ const navItems = [
             <div class="mt-6 rounded-3xl bg-white p-4">
               <div v-for="item in order.items" :key="item.name" class="py-2 text-sm">
                 <div class="flex justify-between gap-4">
-                  <span>{{ item.name }} × {{ item.quantity }}</span>
+                  <span>{{ itemName(item) }} × {{ item.quantity }}</span>
                   <strong>{{ item.price * item.quantity }} Baht</strong>
                 </div>
                 <p v-if="item.note" class="mt-1 rounded-2xl bg-pale px-3 py-2 text-xs font-semibold text-muted">Note: {{ item.note }}</p>
