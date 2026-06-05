@@ -10,7 +10,7 @@ const { t } = useAppState()
 </script>
 
 <template>
-  <div class="flex flex-wrap gap-2">
+  <div class="flex content-start items-start flex-wrap gap-2">
     <span
       v-for="tag in tags"
       :key="tag"

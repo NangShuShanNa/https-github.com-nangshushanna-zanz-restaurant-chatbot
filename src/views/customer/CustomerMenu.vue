@@ -108,8 +108,8 @@ function addSelected() {
                       <h2 class="min-h-12 font-black leading-snug">{{ item.displayName }}</h2>
                       <strong class="whitespace-nowrap text-brand">{{ item.price }} {{ t('Baht') }}</strong>
                     </div>
-                    <p class="mt-3 min-h-16 text-sm leading-relaxed text-muted">{{ item.displayDescription }}</p>
-                    <TagList class="mt-4 min-h-16" :tags="[...item.displayTasteProfiles.slice(0, 1), ...item.displayDietaryTags.slice(0, 1), ...item.displayAllergens.slice(0, 1).map(a => `Contains ${a}`)]" />
+                    <p class="mt-3 text-sm leading-relaxed text-muted">{{ item.displayDescription }}</p>
+                    <TagList class="mt-4" :tags="[...item.displayTasteProfiles.slice(0, 1), ...item.displayDietaryTags.slice(0, 1), ...item.displayAllergens.slice(0, 1).map(a => `Contains ${a}`)]" />
                   </div>
                 </button>
                 <div class="mt-auto flex items-center justify-between gap-3 px-5 pb-5">
