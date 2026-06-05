@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { Trash2 } from '@lucide/vue'
 import { useRouter } from 'vue-router'
 import MobileNav from '../../components/MobileNav.vue'
@@ -14,6 +14,8 @@ const router = useRouter()
 const { state, cartItems, subtotal, total, serviceFee, conflictItems, updateCartItem, removeFromCart, createOrder } = useAppState()
 const tableNumber = ref('T-24')
 const customerNote = ref('')
+const noteDrafts = reactive({})
+const savedNoteId = ref('')
 
 const navItems = [
   { label: 'Starters', to: '/customer/menu', short: 'Menu' },
@@ -23,6 +25,21 @@ const navItems = [
 ]
 
 const conflictsById = computed(() => Object.fromEntries(conflictItems.value.map((item) => [item.id, true])))
+
+watch(
+  cartItems,
+  (items) => {
+    items.forEach((item) => {
+      if (noteDrafts[item.id] === undefined) noteDrafts[item.id] = item.note || ''
+    })
+  },
+  { immediate: true },
+)
+
+function saveItemNote(item) {
+  updateCartItem(item.id, { note: noteDrafts[item.id] || '' })
+  savedNoteId.value = item.id
+}
 
 function submitOrder() {
   if (!cartItems.value.length) return
@@ -62,7 +79,16 @@ function submitOrder() {
                     <button class="ml-3 font-black text-red-600" @click="removeFromCart(item.id)">Remove</button>
                     <button class="ml-3 font-black text-brand">Replace</button>
                   </div>
-                  <input class="field mt-3 py-2" :value="item.note" placeholder="Add note" @input="updateCartItem(item.id, { note: $event.target.value })" />
+                  <div class="mt-3 flex flex-col gap-2 sm:flex-row">
+                    <input
+                      class="field py-2"
+                      :value="noteDrafts[item.id] ?? item.note"
+                      placeholder="Add note"
+                      @input="noteDrafts[item.id] = $event.target.value"
+                    />
+                    <button class="secondary-btn shrink-0 py-2 text-sm" @click="saveItemNote(item)">Save Note</button>
+                  </div>
+                  <p v-if="savedNoteId === item.id" class="mt-2 text-xs font-bold text-brand">Note saved for this item.</p>
                 </div>
                 <div class="flex items-center justify-between gap-3 md:flex-col">
                   <QuantityControl :model-value="item.quantity" @update:model-value="updateCartItem(item.id, { quantity: $event })" />

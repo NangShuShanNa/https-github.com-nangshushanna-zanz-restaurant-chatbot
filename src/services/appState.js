@@ -3,6 +3,8 @@ import { menuItemsSeed, ordersSeed, usersSeed } from '../data/mockData'
 
 const serviceFee = 30
 const menuStorageKey = 'zank-menu-items'
+const cartStorageKey = 'zank-cart-items'
+const orderStorageKey = 'zank-orders'
 
 function readStoredMenuItems() {
   try {
@@ -16,16 +18,43 @@ function persistMenuItems() {
   localStorage.setItem(menuStorageKey, JSON.stringify(state.menuItems))
 }
 
+function readStoredCartItems() {
+  try {
+    return JSON.parse(localStorage.getItem(cartStorageKey)) || [
+      { menuItemId: 'arrabbiata-tagliatelle', quantity: 1, note: '' },
+      { menuItemId: 'halloumi-pear-salad', quantity: 1, note: '' },
+    ]
+  } catch {
+    return [
+      { menuItemId: 'arrabbiata-tagliatelle', quantity: 1, note: '' },
+      { menuItemId: 'halloumi-pear-salad', quantity: 1, note: '' },
+    ]
+  }
+}
+
+function persistCartItems() {
+  localStorage.setItem(cartStorageKey, JSON.stringify(state.cart))
+}
+
+function readStoredOrders() {
+  try {
+    return JSON.parse(localStorage.getItem(orderStorageKey)) || structuredClone(ordersSeed)
+  } catch {
+    return structuredClone(ordersSeed)
+  }
+}
+
+function persistOrders() {
+  localStorage.setItem(orderStorageKey, JSON.stringify(state.orders))
+}
+
 const state = reactive({
   activeUser: JSON.parse(localStorage.getItem('zank-active-user') || 'null'),
   language: localStorage.getItem('zank-language') || 'en',
   menuItems: readStoredMenuItems(),
-  orders: structuredClone(ordersSeed),
+  orders: readStoredOrders(),
   users: structuredClone(usersSeed),
-  cart: [
-    { menuItemId: 'arrabbiata-tagliatelle', quantity: 1, note: '' },
-    { menuItemId: 'halloumi-pear-salad', quantity: 1, note: '' },
-  ],
+  cart: readStoredCartItems(),
   customerPreferences: ['Gluten allergy', 'Vegetarian'],
   selectedCategory: 'Starters',
   lastOrderNumber: 'A102',
@@ -159,6 +188,7 @@ export function useAppState() {
     const existing = state.cart.find((item) => item.menuItemId === menuItemId)
     if (existing) existing.quantity += quantity
     else state.cart.push({ menuItemId, quantity, note })
+    persistCartItems()
     return true
   }
 
@@ -167,10 +197,12 @@ export function useAppState() {
     if (!existing) return
     Object.assign(existing, patch)
     if (existing.quantity <= 0) removeFromCart(menuItemId)
+    else persistCartItems()
   }
 
   function removeFromCart(menuItemId) {
     state.cart = state.cart.filter((item) => item.menuItemId !== menuItemId)
+    persistCartItems()
   }
 
   function createOrder({ tableNumber, customerNote }) {
@@ -195,18 +227,22 @@ export function useAppState() {
     }
     state.orders.unshift(order)
     state.lastOrderNumber = nextNumber
+    persistOrders()
     state.cart = []
+    persistCartItems()
     return order
   }
 
   function updateOrderStatus(orderNumber, status) {
     const order = state.orders.find((entry) => entry.orderNumber === orderNumber)
     if (order) order.status = status
+    persistOrders()
   }
 
   function cancelOrder(orderNumber) {
     const order = state.orders.find((entry) => entry.orderNumber === orderNumber)
     if (order && !['completed', 'cancelled'].includes(order.status)) order.status = 'cancelled'
+    persistOrders()
   }
 
   function saveMenuItem(item) {

@@ -46,10 +46,13 @@ const navItems = [
               </div>
             </div>
             <div class="mt-6 rounded-3xl bg-white p-4">
-              <p v-for="item in order.items" :key="item.name" class="flex justify-between py-2 text-sm">
-                <span>{{ item.name }} × {{ item.quantity }}</span>
-                <strong>{{ item.price * item.quantity }} Baht</strong>
-              </p>
+              <div v-for="item in order.items" :key="item.name" class="py-2 text-sm">
+                <div class="flex justify-between gap-4">
+                  <span>{{ item.name }} × {{ item.quantity }}</span>
+                  <strong>{{ item.price * item.quantity }} Baht</strong>
+                </div>
+                <p v-if="item.note" class="mt-1 rounded-2xl bg-pale px-3 py-2 text-xs font-semibold text-muted">Note: {{ item.note }}</p>
+              </div>
             </div>
             <p class="mt-5 text-sm text-muted">Status updates when staff update the order.</p>
           </section>

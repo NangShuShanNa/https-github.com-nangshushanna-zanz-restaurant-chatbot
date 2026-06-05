@@ -84,24 +84,24 @@ function addSelected() {
 
             <input v-model="search" class="field mb-6 max-w-xl" :placeholder="t('Search dishes, ingredients, or taste')" />
 
-            <section class="grid gap-6 sm:grid-cols-2">
+            <section class="grid items-stretch gap-6 sm:grid-cols-2">
               <article
                 v-for="item in filteredItems"
                 :key="item.id"
-                class="section-card overflow-hidden transition hover:-translate-y-1 hover:shadow-strong"
+                class="section-card flex h-full flex-col overflow-hidden transition hover:-translate-y-1 hover:shadow-strong"
               >
-                <button class="block w-full text-left" @click="openDetail(item)">
+                <button class="flex flex-1 flex-col text-left" @click="openDetail(item)">
                   <img :src="item.image" :alt="item.name" class="h-48 w-full object-cover" />
-                  <div class="p-5">
+                  <div class="flex flex-1 flex-col p-5">
                     <div class="flex items-start justify-between gap-3">
-                      <h2 class="font-black">{{ item.name }}</h2>
+                      <h2 class="min-h-12 font-black leading-snug">{{ item.name }}</h2>
                       <strong class="whitespace-nowrap text-brand">{{ item.price }} {{ t('Baht') }}</strong>
                     </div>
-                    <p class="mt-3 min-h-12 text-sm leading-relaxed text-muted">{{ item.description }}</p>
-                    <TagList class="mt-4" :tags="[...item.tasteProfiles.slice(0, 1), ...item.dietaryTags.slice(0, 1), ...item.allergens.slice(0, 1).map(a => `Contains ${a}`)]" />
+                    <p class="mt-3 min-h-16 text-sm leading-relaxed text-muted">{{ item.description }}</p>
+                    <TagList class="mt-4 min-h-16" :tags="[...item.tasteProfiles.slice(0, 1), ...item.dietaryTags.slice(0, 1), ...item.allergens.slice(0, 1).map(a => `Contains ${a}`)]" />
                   </div>
                 </button>
-                <div class="flex items-center justify-between px-5 pb-5">
+                <div class="mt-auto flex items-center justify-between gap-3 px-5 pb-5">
                   <span v-if="item.availability === 'sold_out'" class="rounded-full bg-red-50 px-3 py-2 text-sm font-bold text-red-700">{{ t('Sold out') }}</span>
                   <button v-else class="primary-btn py-2 text-sm" @click="addToCart(item.id)">{{ t('Add to Cart') }}</button>
                   <button class="secondary-btn py-2 text-sm" @click="openDetail(item)">

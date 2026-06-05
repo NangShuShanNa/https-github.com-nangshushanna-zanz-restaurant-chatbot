@@ -34,10 +34,13 @@ const navItems = [
           <div class="mt-4"><StatusPill :status="order.status" /></div>
           <p class="mt-4 text-muted">Table {{ order.tableNumber }} · {{ order.time }}</p>
           <div class="mt-6 rounded-3xl bg-pale p-5 text-left">
-            <p v-for="item in order.items" :key="item.name" class="flex justify-between py-2 text-sm">
-              <span>{{ item.name }} × {{ item.quantity }}</span>
-              <strong>{{ item.price * item.quantity }} Baht</strong>
-            </p>
+            <div v-for="item in order.items" :key="item.name" class="py-2 text-sm">
+              <div class="flex justify-between gap-4">
+                <span>{{ item.name }} × {{ item.quantity }}</span>
+                <strong>{{ item.price * item.quantity }} Baht</strong>
+              </div>
+              <p v-if="item.note" class="mt-1 rounded-2xl bg-white px-3 py-2 text-xs font-semibold text-muted">Note: {{ item.note }}</p>
+            </div>
           </div>
           <p class="mt-5 text-sm text-muted">Use your order number to check status later.</p>
           <div class="mt-6 flex flex-wrap justify-center gap-3">
