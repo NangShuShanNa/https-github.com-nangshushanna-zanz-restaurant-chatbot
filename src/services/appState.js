@@ -5,6 +5,7 @@ const serviceFee = 30
 const menuStorageKey = 'zank-menu-items'
 const cartStorageKey = 'zank-cart-items'
 const orderStorageKey = 'zank-orders'
+const lastOrderStorageKey = 'zank-last-order-number'
 
 function normalizeMenuItem(item) {
   const seedItem = menuItemsSeed.find((entry) => entry.id === item.id) || {}
@@ -72,7 +73,32 @@ const state = reactive({
   cart: readStoredCartItems(),
   customerPreferences: ['Gluten allergy', 'Vegetarian'],
   selectedCategory: 'Starters',
-  lastOrderNumber: 'A102',
+  lastOrderNumber: localStorage.getItem(lastOrderStorageKey) || 'A102',
+})
+
+window.addEventListener('storage', (event) => {
+  if (event.key === orderStorageKey && event.newValue) {
+    try {
+      state.orders = JSON.parse(event.newValue)
+    } catch {
+      // Keep the current in-memory orders if another tab writes invalid data.
+    }
+  }
+  if (event.key === menuStorageKey && event.newValue) {
+    try {
+      state.menuItems = JSON.parse(event.newValue).map(normalizeMenuItem)
+    } catch {
+      // Keep the current menu if another tab writes invalid data.
+    }
+  }
+  if (event.key === cartStorageKey && event.newValue) {
+    try {
+      state.cart = JSON.parse(event.newValue)
+    } catch {
+      // Keep the current cart if another tab writes invalid data.
+    }
+  }
+  if (event.key === lastOrderStorageKey && event.newValue) state.lastOrderNumber = event.newValue
 })
 
 const translations = {
@@ -243,6 +269,7 @@ export function useAppState() {
     }
     state.orders.unshift(order)
     state.lastOrderNumber = nextNumber
+    localStorage.setItem(lastOrderStorageKey, nextNumber)
     persistOrders()
     state.cart = []
     persistCartItems()
