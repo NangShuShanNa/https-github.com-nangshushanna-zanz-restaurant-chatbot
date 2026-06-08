@@ -1,36 +1,145 @@
 <script setup>
-import { Eye, EyeOff, Lock, Mail, ShieldCheck } from '@lucide/vue'
-import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import AppLogo from '../../components/AppLogo.vue'
-import { useAppState } from '../../services/appState'
+import { Eye, EyeOff, Lock, Mail, ShieldCheck } from "@lucide/vue";
+import { computed, ref } from "vue";
+import { useRouter } from "vue-router";
+import AppLogo from "../../components/AppLogo.vue";
+import { supabase } from "../../supabaseClient";
+import { useAppState } from "../../services/appState";
 
 const props = defineProps({
-  type: { type: String, required: true },
-})
+  type: { type: String, required: true }, // Expects 'owner' or 'staff'
+});
 
-const router = useRouter()
-const { signIn } = useAppState()
-const email = ref(props.type === 'owner' ? 'admin@zank.com' : 'kitchen@zank.com')
-const password = ref('')
-const showPassword = ref(false)
-const showError = ref(false)
+const router = useRouter();
+const { state } = useAppState();
 
-const title = computed(() => props.type === 'owner' ? 'Admin Login' : 'Staff Login')
-const subtitle = computed(() => props.type === 'owner'
-  ? 'Manage menus, ingredients, allergens, and customer orders.'
-  : 'Access live orders and update order status.')
-const target = computed(() => props.type === 'owner' ? '/owner/dashboard' : '/staff/live-orders')
-const demoPassword = computed(() => props.type === 'owner' ? 'admin123' : 'staff123')
+// 🌟 Starts with an empty field instead of autofilling real credentials
+const email = ref(""); 
+const password = ref("");
+const showPassword = ref(false);
+const showError = ref(false);
+const errorMessage = ref("Invalid email or password.");
 
-function submit() {
-  const ok = signIn(props.type === 'owner' ? 'owner' : 'staff', email.value, password.value)
-  if (!ok) {
-    showError.value = true
-    return
+const title = computed(() =>
+  props.type === "owner" ? "Admin Login" : "Staff Login",
+);
+const subtitle = computed(() =>
+  props.type === "owner"
+    ? "Manage menus, ingredients, allergens, and customer orders."
+    : "Access live orders and update order status.",
+);
+const target = computed(() =>
+  props.type === "owner" ? "/owner/dashboard" : "/staff/live-orders",
+);
+const demoPassword = computed(() =>
+  props.type === "owner" ? "admin123" : "staff123",
+);
+
+// 🌟 Dynamically generates a helpful grey placeholder example inside the input box
+const emailPlaceholder = computed(() =>
+  props.type === "owner" ? "e.g., admin@zank.com" : "e.g., kitchen@zank.com",
+);
+
+// Real-time Block: Restrict input fields to English characters, numbers, and basic symbols only
+function validateEnglishOnly(event, type) {
+  const input = event.target;
+  let cleanedValue = "";
+
+  if (type === "email") {
+    // Allows A-Z, a-z, 0-9, and specific characters used in emails (@, ., _, -, +)
+    cleanedValue = input.value.replace(/[^a-zA-Z0-9@._+-]/g, "");
+  } else if (type === "password") {
+    // Allows A-Z, a-z, 0-9, and standard password special characters
+    cleanedValue = input.value.replace(/[^a-zA-Z0-9!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/g, "");
   }
-  showError.value = false
-  router.push(target.value)
+
+  // Update the ref values instantly
+  if (type === "email") email.value = cleanedValue;
+  if (type === "password") password.value = cleanedValue;
+}
+
+async function submit() {
+  try {
+    showError.value = false;
+
+    // Email Format Validation Check (Regex validation before calling Supabase)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.value)) {
+      errorMessage.value = "Please enter a valid email address format (e.g., user@example.com).";
+      showError.value = true;
+      return; 
+    }
+
+    // 1. Authenticate user credentials against Supabase Auth
+    const { data: authData, error: authError } =
+      await supabase.auth.signInWithPassword({
+        email: email.value,
+        password: password.value,
+      });
+
+    if (authError) {
+      errorMessage.value = "Invalid email or password.";
+      throw authError;
+    }
+
+    const userId = authData.user.id;
+    const userEmail = authData.user.email;
+
+    // 2. Fetch user authorization role from the profiles table
+    let { data: profileData, error: profileError } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (profileError) {
+      errorMessage.value = "An error occurred while verifying permissions.";
+      throw profileError;
+    }
+
+    // 3. Auto-Repair: If the profile record doesn't exist yet, insert it automatically
+    if (!profileData) {
+      const defaultRole = props.type === "owner" ? "admin" : "staff";
+      
+      const { data: newProfile, error: insertError } = await supabase
+        .from("profiles")
+        .insert([{ id: userId, email: userEmail, role: defaultRole }])
+        .select("role")
+        .single();
+
+      if (insertError) {
+        errorMessage.value = "Failed to initialize user permissions.";
+        throw insertError;
+      }
+      
+      profileData = newProfile;
+    }
+
+    // 4. Access Guard: Prevent Cross-Role Authentication
+    const currentRole = profileData.role; 
+    const expectedRole = props.type === "owner" ? "admin" : "staff";
+
+    if (currentRole !== expectedRole) {
+      errorMessage.value = `This account does not have permission to access the ${title.value}.`;
+      
+      await supabase.auth.signOut();
+      showError.value = true;
+      return;
+    }
+
+    // 5. UPDATE STATE DATA: Register active user details
+    state.activeUser = {
+      id: userId,
+      email: userEmail,
+      role: currentRole
+    };
+
+    // 6. Success: Redirect user to the designated dashboard destination
+    router.push(target.value);
+  } catch (error) {
+    console.error("Login error:", error.message);
+    showError.value = true;
+  }
 }
 </script>
 
@@ -41,33 +150,57 @@ function submit() {
       <span class="text-sm font-bold text-muted">EN / TH</span>
     </header>
 
-    <section class="mx-auto mt-12 max-w-md rounded-[2rem] bg-white p-8 shadow-strong">
+    <section
+      class="mx-auto mt-12 max-w-md rounded-[2rem] bg-white p-8 shadow-strong"
+    >
       <div class="text-center">
         <AppLogo />
-        <div class="mx-auto mt-6 grid h-12 w-12 place-items-center rounded-full bg-pale text-brand">
+        <div
+          class="mx-auto mt-6 grid h-12 w-12 place-items-center rounded-full bg-pale text-brand"
+        >
           <ShieldCheck :size="26" />
         </div>
         <h1 class="mt-5 text-3xl font-black">{{ title }}</h1>
         <p class="mt-2 text-sm leading-relaxed text-muted">{{ subtitle }}</p>
-        <p class="mt-4 text-sm font-semibold text-brand">For authorized users only.</p>
+        <p class="mt-4 text-sm font-semibold text-brand">
+          For authorized users only.
+        </p>
       </div>
 
       <form class="mt-7 space-y-4" @submit.prevent="submit">
         <label class="block text-sm font-bold">
           Email address
-          <span class="mt-2 flex items-center gap-2 rounded-2xl border border-stone-200 px-4 py-3">
+          <span
+            class="mt-2 flex items-center gap-2 rounded-2xl border border-stone-200 px-4 py-3"
+          >
             <Mail :size="18" class="text-muted" />
-            <input v-model="email" class="w-full outline-none" type="email" />
+            <input 
+              v-model="email" 
+              class="w-full outline-none" 
+              type="email" 
+              :placeholder="emailPlaceholder"
+              @input="validateEnglishOnly($event, 'email')"
+            />
           </span>
         </label>
         <label class="block text-sm font-bold">
           <span class="flex justify-between">
             Password
-            <RouterLink to="/forgot-password" class="text-xs text-brand">Forgot password?</RouterLink>
+            <RouterLink to="/forgot-password" class="text-xs text-brand"
+              >Forgot password?</RouterLink
+            >
           </span>
-          <span class="mt-2 flex items-center gap-2 rounded-2xl border border-stone-200 px-4 py-3">
+          <span
+            class="mt-2 flex items-center gap-2 rounded-2xl border border-stone-200 px-4 py-3"
+          >
             <Lock :size="18" class="text-muted" />
-            <input v-model="password" class="w-full outline-none" :type="showPassword ? 'text' : 'password'" />
+            <input
+              v-model="password"
+              class="w-full outline-none"
+              :type="showPassword ? 'text' : 'password'"
+              placeholder="Enter your password"
+              @input="validateEnglishOnly($event, 'password')"
+            />
             <button
               type="button"
               class="grid h-8 w-8 shrink-0 place-items-center rounded-full text-muted transition hover:bg-pale hover:text-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
@@ -80,10 +213,11 @@ function submit() {
             </button>
           </span>
         </label>
-        <p v-if="showError" class="text-sm font-semibold text-red-600">Invalid email or password.</p>
-        <p class="rounded-2xl bg-pale px-4 py-3 text-xs font-bold text-brand">
-          Demo password: {{ demoPassword }}
+        
+        <p v-if="showError" class="text-sm font-semibold text-red-600">
+          {{ errorMessage }}
         </p>
+        
         <label class="flex items-center gap-2 text-sm text-muted">
           <input type="checkbox" />
           Remember me
@@ -91,8 +225,16 @@ function submit() {
         <button class="primary-btn w-full">Sign In</button>
       </form>
 
-      <RouterLink to="/" class="mt-6 block text-center text-sm font-bold text-brand">← Back to interface selection</RouterLink>
-      <p class="mt-6 border-t border-stone-100 pt-5 text-center text-xs text-muted">Only authorized accounts can access this dashboard.</p>
+      <RouterLink
+        to="/"
+        class="mt-6 block text-center text-sm font-bold text-brand"
+        >← Back to interface selection</RouterLink
+      >
+      <p
+        class="mt-6 border-t border-stone-100 pt-5 text-center text-xs text-muted"
+      >
+        Only authorized accounts can access this dashboard.
+      </p>
     </section>
   </main>
 </template>

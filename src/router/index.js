@@ -41,8 +41,18 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const { state } = useAppState()
-  if (to.meta.requiresOwner && state.activeUser?.role !== 'owner') return '/owner/login'
-  if (to.meta.requiresStaff && !['kitchen_staff', 'reception_staff'].includes(state.activeUser?.role)) return '/staff/login'
+  
+  // 1. Protect Owner/Admin routes
+  // Checks if the route requires owner access and the logged-in user is NOT an 'admin'
+  if (to.meta.requiresOwner && state.activeUser?.role !== 'admin') {
+    return '/owner/login'
+  }
+  
+  // 2. Protect Staff routes
+  // Checks if the route requires staff access and the logged-in user is NOT 'staff'
+  if (to.meta.requiresStaff && state.activeUser?.role !== 'staff') {
+    return '/staff/login'
+  }
 })
 
 export default router
