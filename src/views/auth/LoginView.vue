@@ -1,6 +1,7 @@
 <script setup>
 import { Eye, EyeOff, Lock, Mail, ShieldCheck } from "@lucide/vue";
 import { computed, ref } from "vue";
+import { onMounted } from 'vue';
 import { useRouter } from "vue-router";
 import AppLogo from "../../components/AppLogo.vue";
 import { supabase } from "../../supabaseClient";
@@ -14,7 +15,7 @@ const router = useRouter();
 const { state } = useAppState();
 
 // 🌟 Starts with an empty field instead of autofilling real credentials
-const email = ref(""); 
+const email = ref("");
 const password = ref("");
 const showPassword = ref(false);
 const showError = ref(false);
@@ -50,7 +51,10 @@ function validateEnglishOnly(event, type) {
     cleanedValue = input.value.replace(/[^a-zA-Z0-9@._+-]/g, "");
   } else if (type === "password") {
     // Allows A-Z, a-z, 0-9, and standard password special characters
-    cleanedValue = input.value.replace(/[^a-zA-Z0-9!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/g, "");
+    cleanedValue = input.value.replace(
+      /[^a-zA-Z0-9!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/g,
+      "",
+    );
   }
 
   // Update the ref values instantly
@@ -62,15 +66,16 @@ async function submit() {
   try {
     showError.value = false;
 
-    // Email Format Validation Check (Regex validation before calling Supabase)
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
     if (!emailRegex.test(email.value)) {
-      errorMessage.value = "Please enter a valid email address format (e.g., user@example.com).";
+      errorMessage.value =
+        "Please enter a valid email address format (e.g., user@example.com).";
       showError.value = true;
-      return; 
+      return;
     }
 
-    // 1. Authenticate user credentials against Supabase Auth
+    // Login with Supabase
     const { data: authData, error: authError } =
       await supabase.auth.signInWithPassword({
         email: email.value,
@@ -85,7 +90,7 @@ async function submit() {
     const userId = authData.user.id;
     const userEmail = authData.user.email;
 
-    // 2. Fetch user authorization role from the profiles table
+    // Get role from profiles table
     let { data: profileData, error: profileError } = await supabase
       .from("profiles")
       .select("role")
@@ -97,13 +102,19 @@ async function submit() {
       throw profileError;
     }
 
-    // 3. Auto-Repair: If the profile record doesn't exist yet, insert it automatically
+    // Create profile automatically if not found
     if (!profileData) {
       const defaultRole = props.type === "owner" ? "admin" : "staff";
-      
+
       const { data: newProfile, error: insertError } = await supabase
         .from("profiles")
-        .insert([{ id: userId, email: userEmail, role: defaultRole }])
+        .insert([
+          {
+            id: userId,
+            email: userEmail,
+            role: defaultRole,
+          },
+        ])
         .select("role")
         .single();
 
@@ -111,36 +122,53 @@ async function submit() {
         errorMessage.value = "Failed to initialize user permissions.";
         throw insertError;
       }
-      
+
       profileData = newProfile;
     }
 
-    // 4. Access Guard: Prevent Cross-Role Authentication
-    const currentRole = profileData.role; 
+    const currentRole = profileData.role;
     const expectedRole = props.type === "owner" ? "admin" : "staff";
 
+    // Prevent wrong role login
     if (currentRole !== expectedRole) {
       errorMessage.value = `This account does not have permission to access the ${title.value}.`;
-      
+
       await supabase.auth.signOut();
       showError.value = true;
       return;
     }
 
-    // 5. UPDATE STATE DATA: Register active user details
-    state.activeUser = {
+    // Save active user
+    const userData = {
       id: userId,
       email: userEmail,
-      role: currentRole
+      role: currentRole,
     };
 
-    // 6. Success: Redirect user to the designated dashboard destination
+    state.activeUser = userData;
+
+    // Save to localStorage
+    localStorage.setItem("zank-active-user", JSON.stringify(userData));
+
+    console.log("LOGIN SUCCESS");
+    console.log("USER:", userData);
+    console.log("LOCAL STORAGE:", localStorage.getItem("zank-active-user"));
+
     router.push(target.value);
   } catch (error) {
-    console.error("Login error:", error.message);
+    console.error("Login error:", error);
     showError.value = true;
   }
 }
+
+onMounted(() => {
+  const { state } = useAppState()
+
+  if (state.activeUser) {
+    state.activeUser = null
+    localStorage.removeItem('zank-active-user')
+  }
+})
 </script>
 
 <template>
@@ -154,7 +182,6 @@ async function submit() {
       class="mx-auto mt-12 max-w-md rounded-[2rem] bg-white p-8 shadow-strong"
     >
       <div class="text-center">
-        <AppLogo />
         <div
           class="mx-auto mt-6 grid h-12 w-12 place-items-center rounded-full bg-pale text-brand"
         >
@@ -174,10 +201,10 @@ async function submit() {
             class="mt-2 flex items-center gap-2 rounded-2xl border border-stone-200 px-4 py-3"
           >
             <Mail :size="18" class="text-muted" />
-            <input 
-              v-model="email" 
-              class="w-full outline-none" 
-              type="email" 
+            <input
+              v-model="email"
+              class="w-full outline-none"
+              type="email"
               :placeholder="emailPlaceholder"
               @input="validateEnglishOnly($event, 'email')"
             />
@@ -213,11 +240,11 @@ async function submit() {
             </button>
           </span>
         </label>
-        
+
         <p v-if="showError" class="text-sm font-semibold text-red-600">
           {{ errorMessage }}
         </p>
-        
+
         <label class="flex items-center gap-2 text-sm text-muted">
           <input type="checkbox" />
           Remember me

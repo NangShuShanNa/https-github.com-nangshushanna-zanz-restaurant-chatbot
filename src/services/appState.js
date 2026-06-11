@@ -76,6 +76,11 @@ const state = reactive({
   lastOrderNumber: localStorage.getItem(lastOrderStorageKey) || 'A102',
 })
 
+console.log(
+  'LOCAL STORAGE USER:',
+  localStorage.getItem('zank-active-user')
+)
+
 window.addEventListener('storage', (event) => {
   if (event.key === orderStorageKey && event.newValue) {
     try {
