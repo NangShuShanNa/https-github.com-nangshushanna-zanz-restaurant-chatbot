@@ -6,6 +6,7 @@ import SideNav from "../../components/SideNav.vue";
 import StatusPill from "../../components/StatusPill.vue";
 import TopBar from "../../components/TopBar.vue";
 import { useAppState } from "../../services/appState";
+import { supabase } from "../../supabaseClient";
 
 const router = useRouter();
 const { state, signOut } = useAppState();
@@ -71,6 +72,42 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener("popstate", handleBackButton);
 });
+
+const restaurantName = ref("");
+
+async function fetchRestaurantName() {
+  try {
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError) throw authError;
+
+    if (user) {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("restaurant_name")
+        .eq("id", user.id)
+        .single();
+
+      if (error) throw error;
+
+      if (data && data.restaurant_name) {
+        restaurantName.value = data.restaurant_name;
+      } else {
+        restaurantName.value = "Zank Restaurant";
+      }
+    }
+  } catch (error) {
+    console.error("Error fetching restaurant name:", error.message);
+    restaurantName.value = "Zank Restaurant";
+  }
+}
+
+onMounted(() => {
+  fetchRestaurantName();
+});
 </script>
 
 <template>
@@ -81,12 +118,23 @@ onUnmounted(() => {
       <main class="main-panel">
         <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 class="text-4xl font-black">Owner Dashboard</h1>
+            <div class="flex items-center gap-3 flex-wrap">
+              <h1 class="text-4xl font-black text-stone-900">
+                Owner Dashboard
+              </h1>
+
+              <span
+                v-if="restaurantName"
+                class="inline-flex items-center rounded-full bg-gradient-to-r from-amber-400 to-orange-500 px-6 py-2 text-xl font-extrabold text-white shadow-lg shadow-orange-300/50"
+              >
+                {{ restaurantName }}
+              </span>
+            </div>
+
             <p class="mt-2 text-muted">
               Overview of restaurant orders and menu availability.
             </p>
           </div>
-          <button class="secondary-btn py-2" @click="logout">Logout</button>
         </div>
 
         <section class="grid gap-5 md:grid-cols-3">
