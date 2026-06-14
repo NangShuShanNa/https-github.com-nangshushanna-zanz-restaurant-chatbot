@@ -6,15 +6,16 @@ import SideNav from "../../components/SideNav.vue";
 import TopBar from "../../components/TopBar.vue";
 import { useAppState } from "../../services/appState";
 import { supabase } from "../../supabaseClient";
+import bcrypt from "bcryptjs";
 
 const { state } = useAppState();
 
 const ownerNav = [
-  { label: "Dashboard", to: "/owner/dashboard", short: "Home" },
-  { label: "Menu Management", to: "/owner/menu-management", short: "Menu" },
-  { label: "Orders", to: "/owner/orders" },
-  { label: "Staff Accounts", to: "/owner/staff-accounts", short: "Staff" },
-  { label: "Logout", to: "/logout", short: "Logout" },
+  { label: 'Dashboard', to: '/owner/dashboard', short: 'Home' },
+  { label: 'Menu Management', to: '/owner/menu-management', short: 'Menu' },
+  { label: 'Orders', to: '/owner/orders' },
+  { label: 'Staff Accounts', to: '/owner/staff-accounts', short: 'Staff' },
+  { label: 'Logout', to: '/logout', short: 'Logout' },
 ];
 
 // --- Reactive State Setup ---
@@ -25,11 +26,11 @@ const restaurantName = ref("");
 const isLoading = ref(false);
 
 const form = reactive({
-  fullName: "",
-  email: "",
-  role: "staff",
-  password: "",
-  confirmPassword: "",
+  fullName: '',
+  email: '',
+  role: 'kitchen_staff',
+  password: '',
+  confirmPassword: '',
 });
 
 // --- Edit Modal State ---
@@ -80,6 +81,7 @@ async function fetchStaffData() {
         fullName: item.name || "-",
         email: item.email,
         role: item.role,
+        status: item.status || "active",
         lastLogin: item.last_login || item.lastLogin || "-",
       }));
     }
@@ -103,7 +105,7 @@ function handleEditStaff(user) {
     id: user.id,
     fullName: user.fullName === "-" ? "" : user.fullName,
     email: user.email,
-    newPassword: "" // Kept blank unless owner intends to override it
+    newPassword: "" 
   });
   isEditModalOpen.value = true;
 }
@@ -116,7 +118,7 @@ function closeEditModal() {
 }
 
 /**
- * Submits the edited staff details to profiles and updates authentication parameters if required
+ * Submits the edited staff details to profiles and updates encryption parameters
  */
 async function submitEdit() {
   if (!editingStaff.fullName || !editingStaff.email) {
@@ -127,29 +129,26 @@ async function submitEdit() {
   try {
     isEditingSubmit.value = true;
 
-    // 1. Update public profile data fields
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .update({
-        name: editingStaff.fullName,
-        email: editingStaff.email.trim()
-      })
-      .eq("id", editingStaff.id);
+    const updatePayload = {
+      name: editingStaff.fullName,
+      email: editingStaff.email.trim()
+    };
 
-    if (profileError) throw profileError;
-
-    // 2. Optional: Trigger a password reset via RPC or management endpoints if a new password is provided
     if (editingStaff.newPassword) {
       if (editingStaff.newPassword.length < 6) {
         alert("Password must be at least 6 characters long.");
         return;
       }
-      
-      // Note: Updating passwords for other users typically requires administrative service roles 
-      // or standard password reset links sent via email. 
-      // For standalone prototyping, we notify the admin about password updates.
-      console.log("Password change requested for user id:", editingStaff.id);
+      const salt = bcrypt.genSaltSync(10);
+      updatePayload.password_hash = bcrypt.hashSync(editingStaff.newPassword, salt);
     }
+
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .update(updatePayload)
+      .eq("id", editingStaff.id);
+
+    if (profileError) throw profileError;
 
     alert("Staff account details updated successfully!");
     isEditModalOpen.value = false;
@@ -162,11 +161,16 @@ async function submitEdit() {
 }
 
 /**
- * Handles submission for creating a brand-new isolated staff account
+ * Handles submission for creating a brand-new staff account with bcrypt encryption
  */
 async function submit() {
   if (!form.fullName || !form.email || !form.password || form.password !== form.confirmPassword) {
     alert("Please fill out all required fields and ensure passwords match.");
+    return;
+  }
+
+  if (form.password.length < 6) {
+    alert("Password must be at least 6 characters long.");
     return;
   }
 
@@ -178,6 +182,10 @@ async function submit() {
   try {
     isLoading.value = true;
     const cleanEmail = form.email.trim();
+
+    // 🌟 Encrypt the form password using Bcrypt
+    const salt = bcrypt.genSaltSync(10);
+    const securePasswordHash = bcrypt.hashSync(form.password, salt);
 
     const tempSupabase = createClient(
       import.meta.env.VITE_SUPABASE_URL,
@@ -212,6 +220,7 @@ async function submit() {
           restaurant_id: restaurantId.value,
           restaurant_name: restaurantName.value,
           created_by: currentOwnerId.value,
+          password_hash: securePasswordHash, 
         })
         .eq("id", signUpData.user.id);
 
@@ -228,6 +237,7 @@ async function submit() {
                 restaurant_id: restaurantId.value,
                 restaurant_name: restaurantName.value,
                 created_by: currentOwnerId.value,
+                password_hash: securePasswordHash, 
               },
             ]);
           if (insertError) throw insertError;
@@ -242,13 +252,11 @@ async function submit() {
     Object.assign(form, {
       fullName: "",
       email: "",
-      role: "staff",
-      restaurant_id: restaurantId.value,
-      restaurant_name: restaurantName.value,
+      role: "kitchen_staff",
       password: "",
       confirmPassword: "",
     });
-    alert("Staff account created and registered successfully!");
+    alert("Staff account created and registered securely!");
   } catch (error) {
     alert("Failed to create account: " + error.message);
   } finally {
@@ -284,14 +292,12 @@ async function handleRemoveStaff(userId) {
       <SideNav :items="ownerNav" />
       <main class="main-panel">
         <h1 class="text-4xl font-black">Staff Accounts</h1>
-        <p class="mt-2 text-muted">
-          Create staff logins and manage access to live orders.
-        </p>
+        <p class="mt-2 text-muted">Create staff logins and manage access to live orders.</p>
 
         <section class="mt-6 grid gap-6 xl:grid-cols-[1fr_380px]">
           <article class="section-card overflow-hidden">
-            <div class="hidden bg-pale px-5 py-4 text-sm font-black text-brand lg:grid lg:grid-cols-[1fr_1.5fr_1fr_1fr]">
-              <span>Name</span><span>Email</span><span>Role</span><span>Actions</span>
+            <div class="hidden bg-pale px-5 py-4 text-sm font-black text-brand lg:grid lg:grid-cols-[1fr_1.2fr_1fr_.8fr_1fr_1.2fr]">
+              <span>Name</span><span>Email</span><span>Role</span><span>Status</span><span>Last Login</span><span>Actions</span>
             </div>
 
             <div v-if="isLoading" class="p-5 text-center text-muted">
@@ -302,27 +308,24 @@ async function handleRemoveStaff(userId) {
               No staff accounts found for your restaurant.
             </div>
 
-            <div v-else v-for="user in staffItems" :key="user.id" class="grid gap-3 border-t border-stone-100 p-5 lg:grid-cols-[1fr_1.5fr_1fr_1fr] lg:items-center">
+            <div v-else v-for="user in staffItems" :key="user.id" class="grid gap-3 border-t border-stone-100 p-5 lg:grid-cols-[1fr_1.2fr_1fr_.8fr_1fr_1.2fr] lg:items-center">
               <strong>{{ user.fullName }}</strong>
               <span class="text-sm text-muted">{{ user.email }}</span>
-              <span class="rounded-full px-3 py-1 text-xs font-bold w-fit bg-pale text-brand uppercase">
-                {{ user.role }}
-              </span>
+              <span class="capitalize">{{ user.role.replace('_', ' ') }}</span>
+              <span class="rounded-full px-3 py-1 text-xs font-bold w-fit" :class="user.status === 'active' ? 'bg-pale text-brand' : 'bg-stone-100 text-muted'">{{ user.status }}</span>
+              <span class="text-sm text-muted">{{ user.lastLogin }}</span>
               
               <div class="flex items-center gap-2">
                 <button
                   class="flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50 hover:text-brand focus:outline-none focus:ring-2 focus:ring-brand/20"
                   @click="handleEditStaff(user)"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
                   Edit
                 </button>
-
                 <button
                   class="flex items-center gap-1.5 rounded-lg bg-transparent px-3 py-1.5 text-xs font-semibold text-stone-400 transition hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-200"
                   @click="handleRemoveStaff(user.id)"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
                   Remove
                 </button>
               </div>
@@ -331,20 +334,17 @@ async function handleRemoveStaff(userId) {
 
           <form class="section-card p-5 h-fit" @submit.prevent="submit">
             <h2 class="text-xl font-black">Add Staff Account</h2>
-            <p class="mt-2 text-sm text-muted">
-              Staff can access Live Orders and Menu Items only.
-            </p>
+            <p class="mt-2 text-sm text-muted">Staff can access Live Orders and Menu Items only. Owner pages remain restricted.</p>
             <div class="mt-5 grid gap-3">
               <input v-model="form.fullName" class="field" placeholder="Full Name" required />
               <input v-model="form.email" class="field" placeholder="Email Address" type="email" required />
               <select v-model="form.role" class="field">
-                <option value="staff">Staff</option>
+                <option value="kitchen_staff">Kitchen Staff</option>
+                <option value="reception_staff">Reception Staff</option>
               </select>
               <input v-model="form.password" class="field" placeholder="Temporary Password" type="password" required />
               <input v-model="form.confirmPassword" class="field" placeholder="Confirm Password" type="password" required />
-              <button class="primary-btn" :disabled="isLoading">
-                Create Account
-              </button>
+              <button class="primary-btn" :disabled="isLoading">Create Account</button>
             </div>
           </form>
         </section>
@@ -352,40 +352,30 @@ async function handleRemoveStaff(userId) {
     </div>
     <MobileNav :items="ownerNav" />
 
-    <div v-if="isEditModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm transition-opacity animate-fade-in">
-      <div class="w-full max-w-md overflow-hidden rounded-2xl bg-white p-6 shadow-2xl transition-all border border-stone-100">
+    <div v-if="isEditModalOpen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm transition-opacity">
+      <div class="w-full max-w-md overflow-hidden rounded-2xl bg-white p-6 shadow-2xl border border-stone-100">
         <div class="flex items-center justify-between border-b border-stone-100 pb-4">
-          <h3 class="text-lg font-black text-stone-900 flex items-center gap-2">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-brand"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-            Edit Staff Profile
-          </h3>
-          <button @click="closeEditModal" class="rounded-lg p-1 text-stone-400 transition hover:bg-stone-100 hover:text-stone-700">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
+          <h3 class="text-lg font-black text-stone-900">Edit Staff Profile</h3>
+          <button @click="closeEditModal" class="rounded-lg p-1 text-stone-400 hover:bg-stone-100">✕</button>
         </div>
 
         <form @submit.prevent="submitEdit" class="mt-4 grid gap-4">
           <div>
-            <label class="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">Full Name</label>
+            <label class="block text-xs font-bold text-stone-500 uppercase mb-1">Full Name</label>
             <input v-model="editingStaff.fullName" class="field" placeholder="Staff Member Name" required />
           </div>
-
           <div>
-            <label class="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">Email Address</label>
+            <label class="block text-xs font-bold text-stone-500 uppercase mb-1">Email Address</label>
             <input v-model="editingStaff.email" class="field" placeholder="email@zank.com" type="email" required />
           </div>
-
-          <div class="border-t border-stone-100 pt-3 mt-1">
-            <label class="block text-xs font-bold text-stone-500 uppercase tracking-wider mb-1">Override Password (Optional)</label>
-            <input v-model="editingStaff.newPassword" class="field" placeholder="Leave blank to keep current password" type="password" />
-            <p class="mt-1 text-xs text-stone-400">Only input if you need to enforce a critical password reset.</p>
+          <div class="border-t border-stone-100 pt-3">
+            <label class="block text-xs font-bold text-stone-500 uppercase mb-1">Override Password (Optional)</label>
+            <input v-model="editingStaff.newPassword" class="field" placeholder="Leave blank to keep current" type="password" />
           </div>
 
           <div class="mt-4 flex justify-end gap-2 border-t border-stone-100 pt-4">
-            <button type="button" @click="closeEditModal" class="rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-semibold text-stone-700 shadow-sm transition hover:bg-stone-50">
-              Cancel
-            </button>
-            <button type="submit" :disabled="isEditingSubmit" class="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white shadow-md transition hover:bg-brand-dark disabled:opacity-50">
+            <button type="button" @click="closeEditModal" class="rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-semibold">Cancel</button>
+            <button type="submit" :disabled="isEditingSubmit" class="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white shadow-md">
               {{ isEditingSubmit ? 'Saving...' : 'Save Changes' }}
             </button>
           </div>
@@ -394,13 +384,3 @@ async function handleRemoveStaff(userId) {
     </div>
   </div>
 </template>
-
-<style scoped>
-.animate-fade-in {
-  animation: fadeIn 0.18s ease-out;
-}
-@keyframes fadeIn {
-  from { opacity: 0; transform: scale(0.98); }
-  to { opacity: 1; transform: scale(1); }
-}
-</style>

@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Kanit:wght@400;700&family=Noto+Sans+Thai:wght@400;700&display=swap");
 @import "tailwindcss";
 
 @theme {
@@ -8,9 +9,10 @@
   --color-assistant: #b8edbb;
   --color-page: #f5f5f5;
   --color-muted: #6b6b6b;
-  --shadow-soft: 0 18px 45px rgb(37 70 36 / 0.10);
+  --shadow-soft: 0 18px 45px rgb(37 70 36 / 0.1);
   --shadow-strong: 0 22px 55px rgb(37 70 36 / 0.18);
-  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-sans:
+    "Noto Sans Thai", "Kanit", Inter, ui-sans-serif, system-ui, sans-serif;
   --font-serif: Georgia, "Times New Roman", serif;
 }
 
@@ -20,6 +22,7 @@
 
 html {
   background: #f5f5f5;
+  font-family: var(--font-sans) !important;
 }
 
 body {
@@ -27,6 +30,7 @@ body {
   min-width: 320px;
   background: #f5f5f5;
   color: #111;
+  font-family: var(--font-sans) !important;
 }
 
 button,
@@ -35,7 +39,6 @@ textarea,
 select {
   font: inherit;
 }
-
 button {
   cursor: pointer;
 }
@@ -44,18 +47,15 @@ button {
   min-height: 100vh;
   background: #f5f5f5;
 }
-
 .content-shell {
   display: flex;
   min-height: calc(100vh - 80px);
 }
-
 .main-panel {
   flex: 1;
   background: #f1faec;
   padding: 2rem;
 }
-
 .section-card {
   border: 1px solid #e9eee5;
   border-radius: 1.5rem;
@@ -71,7 +71,6 @@ button {
   color: #fff;
   transition: 160ms ease;
 }
-
 .primary-btn:hover {
   background: #1f5f25;
   transform: translateY(-1px);
@@ -85,7 +84,6 @@ button {
   font-weight: 800;
   color: #2e7d32;
 }
-
 .quick-btn {
   border-radius: 999px;
   background: #f4f4f4;
@@ -95,7 +93,6 @@ button {
   font-weight: 700;
   color: #333;
 }
-
 .field {
   width: 100%;
   border-radius: 1rem;
@@ -104,12 +101,10 @@ button {
   padding: 0.85rem 1rem;
   outline: none;
 }
-
 .field:focus {
   border-color: #2e7d32;
   box-shadow: 0 0 0 4px rgb(46 125 50 / 0.12);
 }
-
 .table-grid {
   display: grid;
   grid-template-columns: var(--cols);
@@ -122,12 +117,10 @@ button {
     display: block;
     padding-bottom: 5.5rem;
   }
-
   .main-panel {
     padding: 1rem;
   }
 }
-
 @media (max-width: 720px) {
   .table-grid {
     display: block;

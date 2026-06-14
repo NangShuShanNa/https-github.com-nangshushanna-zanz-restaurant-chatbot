@@ -1,8 +1,10 @@
 <script setup>
-import { Globe2, Search, ShoppingCart, UserCircle } from '@lucide/vue'
-import { computed, ref } from 'vue'
+import { computed, ref, onMounted } from 'vue'
+import { Globe2, ShoppingCart, UserCircle, LogOut } from '@lucide/vue'
 import AppLogo from './AppLogo.vue'
 import { useAppState } from '../services/appState'
+import { supabase } from '../supabaseClient'
+import { useRouter } from 'vue-router'
 
 defineProps({
   cartCount: { type: Number, default: 0 },
@@ -13,86 +15,101 @@ defineProps({
 
 defineEmits(['update:modelValue'])
 
+const router = useRouter()
 const { state, toggleLanguage, t } = useAppState()
-const showAccountMenu = ref(false)
+
+const userEmail = ref("")
+const dbRole = ref("")
 
 const accountLabel = computed(() => {
-  if (state.activeUser?.role === 'owner') return state.language === 'en' ? 'Owner / Admin' : 'เจ้าของร้าน / แอดมิน'
-  if (state.activeUser?.role === 'kitchen_staff') return state.language === 'en' ? 'Kitchen Staff' : 'พนักงานครัว'
-  if (state.activeUser?.role === 'reception_staff') return state.language === 'en' ? 'Reception Staff' : 'พนักงานต้อนรับ'
-  return state.language === 'en' ? 'Customer' : 'ลูกค้า'
+  const role = dbRole.value?.toLowerCase()
+  if (role === 'admin' || role === 'owner') {
+    return state.language === 'en' ? 'Owner / Admin' : 'เจ้าของร้าน / แอดมิน'
+  }
+  if (role === 'staff') {
+    return state.language === 'en' ? 'Staff' : 'พนักงาน'
+  }
+  return state.language === 'en' ? 'Customer' : 'ลูกค้าทั่วไป'
 })
 
-const accountActions = computed(() => {
-  if (state.activeUser?.role === 'owner') {
-    return [
-      { label: state.language === 'en' ? 'Owner Dashboard' : 'แดชบอร์ดเจ้าของร้าน', to: '/owner/dashboard' },
-      { label: state.language === 'en' ? 'Menu Management' : 'จัดการเมนู', to: '/owner/menu-management' },
-      { label: state.language === 'en' ? 'Logout' : 'ออกจากระบบ', to: '/logout' },
-    ]
+async function fetchUserData() {
+  try {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError) throw authError;
+
+    if (user) {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("email, role")
+        .eq("id", user.id)
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        userEmail.value = data.email || user.email;
+        dbRole.value = data.role || "customer";
+      }
+    } else {
+      userEmail.value = state.language === 'en' ? 'Guest' : 'ลูกค้าทั่วไป';
+      dbRole.value = "customer";
+    }
+  } catch (error) {
+    console.error("Error fetching user data from table:", error.message);
+    userEmail.value = state.language === 'en' ? 'Guest' : 'ลูกค้าทั่วไป';
+    dbRole.value = "customer";
   }
-  if (['kitchen_staff', 'reception_staff'].includes(state.activeUser?.role)) {
-    return [
-      { label: state.language === 'en' ? 'Live Orders' : 'ออเดอร์สด', to: '/staff/live-orders' },
-      { label: state.language === 'en' ? 'Menu Items' : 'รายการเมนู', to: '/staff/menu-items' },
-      { label: state.language === 'en' ? 'Logout' : 'ออกจากระบบ', to: '/logout' },
-    ]
+}
+
+async function handleLogout() {
+  const { error } = await supabase.auth.signOut();
+  if (!error) {
+    router.push("/");
+  } else {
+    console.error(error.message);
   }
-  return [
-    { label: state.language === 'en' ? 'Open Menu' : 'เปิดเมนู', to: '/customer/menu' },
-    { label: state.language === 'en' ? 'Check Order Status' : 'ตรวจสอบสถานะออเดอร์', to: '/customer/order-status' },
-    { label: state.language === 'en' ? 'Interface Selection' : 'เลือกหน้าการใช้งาน', to: '/' },
-  ]
-})
+}
+
+onMounted(() => {
+  fetchUserData();
+});
 </script>
 
 <template>
-  <header class="sticky top-0 z-20 flex h-20 items-center gap-4 border-b border-stone-100 bg-white/95 px-5 backdrop-blur">
-    <AppLogo />
-    <label class="ml-auto flex h-11 min-w-0 flex-1 max-w-xl items-center gap-3 rounded-full bg-pale px-4 text-sm text-muted">
-      <Search :size="18" />
-      <input
-        class="min-w-0 flex-1 bg-transparent outline-none"
-        :value="modelValue"
-        :placeholder="t(searchPlaceholder)"
-        @input="$emit('update:modelValue', $event.target.value)"
-      />
-    </label>
-    <button class="hidden items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold text-stone-700 transition hover:bg-pale sm:flex" @click="toggleLanguage">
-      <Globe2 :size="20" />
-      <span>{{ state.language === 'en' ? 'EN / TH' : 'TH / EN' }}</span>
-    </button>
-    <RouterLink
-      v-if="!owner"
-      to="/customer/cart"
-      class="relative z-30 inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-stone-900 transition hover:bg-pale focus:outline-none focus:ring-2 focus:ring-brand/40"
-      :aria-label="state.language === 'en' ? 'Open cart' : 'เปิดตะกร้า'"
-      :title="state.language === 'en' ? 'Open cart' : 'เปิดตะกร้า'"
-    >
-      <ShoppingCart :size="25" />
-      <span v-if="cartCount" class="absolute -right-2 -top-2 grid h-5 w-5 place-items-center rounded-full bg-brand text-xs font-bold text-white">{{ cartCount }}</span>
-    </RouterLink>
-    <div class="relative flex items-center gap-2">
-      <button class="rounded-full p-2 transition hover:bg-pale" :aria-label="state.language === 'en' ? 'Open account menu' : 'เปิดเมนูบัญชี'" @click="showAccountMenu = !showAccountMenu">
-        <UserCircle :size="30" />
+  <header class="sticky top-0 z-20 flex h-20 items-center justify-between border-b border-stone-100 bg-white/95 px-5 backdrop-blur">
+    
+    <div class="flex items-center gap-4">
+      <AppLogo :to="dbRole?.toLowerCase() === 'admin' || dbRole?.toLowerCase() === 'owner' ? '/owner/dashboard' : '/'" />
+    </div>
+
+    <div class="flex items-center gap-4">
+      
+      <button class="hidden items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold text-stone-700 transition hover:bg-pale sm:flex" @click="toggleLanguage">
+        <Globe2 :size="20" />
+        <span>{{ state.language === 'en' ? 'EN / TH' : 'TH / EN' }}</span>
       </button>
-      <span v-if="owner" class="hidden text-sm font-semibold text-muted md:inline">{{ state.language === 'en' ? 'Owner' : 'เจ้าของร้าน' }}</span>
-      <div v-if="showAccountMenu" class="absolute right-0 top-12 z-50 w-64 rounded-3xl border border-stone-100 bg-white p-3 shadow-strong">
-        <div class="border-b border-stone-100 px-3 pb-3">
-          <p class="text-xs font-bold uppercase tracking-wide text-muted">{{ state.language === 'en' ? 'Account' : 'บัญชี' }}</p>
-          <p class="mt-1 font-black text-stone-900">{{ accountLabel }}</p>
-          <p class="text-xs text-muted">{{ state.activeUser?.email || (state.language === 'en' ? 'No login required' : 'ไม่ต้องเข้าสู่ระบบ') }}</p>
+
+      <RouterLink
+        v-if="dbRole?.toLowerCase() !== 'admin' && dbRole?.toLowerCase() !== 'owner' && dbRole?.toLowerCase() !== 'staff'"
+        to="/customer/cart"
+        class="relative z-30 inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-stone-900 transition hover:bg-pale focus:outline-none focus:ring-2 focus:ring-brand/40"
+        :aria-label="state.language === 'en' ? 'Open cart' : 'เปิดตะกร้า'"
+        :title="state.language === 'en' ? 'Open cart' : 'เปิดตะกร้า'"
+      >
+        <ShoppingCart :size="25" />
+        <span v-if="cartCount" class="absolute -right-2 -top-2 grid h-5 w-5 place-items-center rounded-full bg-brand text-xs font-bold text-white">{{ cartCount }}</span>
+      </RouterLink>
+
+      <div class="relative flex items-center gap-2 rounded-full border border-stone-100 p-3 pr-4 bg-stone-50">
+        
+        <div class="rounded-full text-stone-600">
+          <UserCircle :size="30" />
         </div>
-        <div class="mt-2 grid gap-1">
-          <RouterLink
-            v-for="action in accountActions"
-            :key="action.to"
-            :to="action.to"
-            class="rounded-2xl px-3 py-2 text-sm font-bold text-stone-700 hover:bg-pale hover:text-brand"
-            @click="showAccountMenu = false"
-          >
-            {{ action.label }}
-          </RouterLink>
+        
+        <div class="hidden flex-col text-left leading-tight md:flex">
+          <span class="text-sm font-bold text-stone-900 max-w-[150px] truncate">{{ userEmail }}</span>
+          <span class="text-xs font-medium text-stone-500">{{ accountLabel }}</span>
         </div>
       </div>
     </div>
