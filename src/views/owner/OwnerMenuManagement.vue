@@ -9,6 +9,9 @@ import TopBar from "../../components/TopBar.vue";
 
 // Import Supabase client database connection
 import { supabase } from "../../supabaseClient";
+import { useAppState } from "../../services/appState"; // Sync language variables
+
+const { state } = useAppState();
 
 const ownerNav = [
   { label: "Dashboard", to: "/owner/dashboard", short: "Home" },
@@ -32,9 +35,15 @@ const addForm = reactive({}); // For Center-PopUp Add New Item
 async function fetchMenuItems() {
   isLoading.value = true;
   try {
+    // Check global authentication fallback credentials
+    const savedUserJson = localStorage.getItem("zank-active-user");
+    if (!savedUserJson) throw new Error("No active session found.");
+    const localUser = JSON.parse(savedUserJson);
+
     const { data, error } = await supabase
       .from("menu_items")
       .select("*")
+      .eq("restaurant_id", localUser.restaurant_id) // Query items paired with the correct store
       .order("created_at", { ascending: false });
 
     if (error) throw error;
@@ -196,6 +205,8 @@ async function submitEdit() {
 
     await fetchMenuItems();
     alert("Item updated successfully!");
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
   } catch (error) {
     alert("Error updating data: " + error.message);
   }
@@ -206,7 +217,7 @@ function addNew() {
   Object.assign(addForm, {
     name: "",
     nameTh: "",
-    category: "",
+    category: "Main Courses",
     price: 0,
     image: "",
     description: "",
@@ -226,18 +237,14 @@ function addNew() {
 }
 
 // 5. Submit Insertion for new item (Modal)
-// 5. Submit Insertion for new item (Modal)
 async function submitAdd() {
   try {
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    
-    if (userError || !user) {
-      alert("ไม่พบข้อมูลผู้ใช้งาน หรือเซสชันหมดอายุ กรุณาล็อกอินใหม่อีกครั้ง");
-      return;
-    }
+    const savedUserJson = localStorage.getItem("zank-active-user");
+    if (!savedUserJson) throw new Error("No active session found.");
+    const localUser = JSON.parse(savedUserJson);
 
     const payload = {
-      owner_id: user.id,
+      restaurant_id: localUser.restaurant_id, 
       name: addForm.name,
       category: addForm.category,
       price: Number(addForm.price),
@@ -297,12 +304,14 @@ async function submitAdd() {
       availability: addForm.availability,
     };
 
-    const { error } = await supabase.from("menu_items").insert([payload]);
+    const { error } = await supabase.from("menu_items") .insert([payload]);
     if (error) throw error;
 
     isModalOpen.value = false;
     await fetchMenuItems();
     alert("New item added successfully!");
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
   } catch (error) {
     alert("Error creating item: " + error.message);
   }
@@ -339,23 +348,23 @@ async function removeItem(item) {
       <main class="main-panel">
         <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 class="text-4xl font-black">Menu Management</h1>
+            <h1 class="text-4xl font-black">
+              {{ state.language === 'en' ? 'Menu Management' : 'การจัดการรายการเมนู' }}
+            </h1>
             <p class="mt-2 text-muted">
-              Manage dishes, ingredients, allergens, taste profiles, and
-              availability.
+              {{ state.language === 'en' ? 'Manage dishes, ingredients, allergens, taste profiles, and availability.' : 'จัดการรายละเอียดอาหาร, ส่วนผสม, สารก่อภูมิแพ้, รสชาติ และสถานะการขาย' }}
             </p>
           </div>
           <button
             class="primary-btn inline-flex items-center gap-2"
             @click="addNew"
           >
-            <Plus :size="18" /> Add Menu Item
+            <Plus :size="18" /> {{ state.language === 'en' ? 'Add Menu Item' : 'เพิ่มรายการเมนูใหม่' }}
           </button>
         </div>
 
-        <!-- TRADITIONAL SIDE-BY-SIDE LAYOUT (Used for editing items) -->
-        <section class="grid gap-6 xl:grid-cols-[1fr_420px]">
-          <!-- LEFT PART: The Menu Items Table list -->
+        <section class="grid gap-6 xl:grid-cols-[1fr_420px] items-start">
+          
           <article class="section-card overflow-hidden">
             <div v-if="isLoading" class="p-5 text-center text-muted">
               Loading menu items...
@@ -365,9 +374,7 @@ async function removeItem(item) {
                 v-for="item in menuItems"
                 :key="item.id"
                 class="grid cursor-pointer gap-4 p-5 transition hover:bg-pale lg:grid-cols-[80px_1.2fr_.7fr_.7fr_1fr_auto] lg:items-center"
-                :class="
-                  selected?.id === item.id ? 'bg-pale ring-2 ring-brand/20' : ''
-                "
+                :class="selected?.id === item.id ? 'bg-pale ring-2 ring-brand/20' : ''"
                 @click="load(item)"
               >
                 <img
@@ -376,11 +383,8 @@ async function removeItem(item) {
                   class="h-20 w-20 rounded-2xl object-cover"
                 />
                 <div>
-                  <strong>{{ item.name }}</strong>
-                  <p
-                    v-if="item.nameTh"
-                    class="text-sm font-semibold text-brand"
-                  >
+                  <strong>{{ state.language === 'th' ? (item.nameTh || item.name) : item.name }}</strong>
+                  <p v-if="item.nameTh && state.language === 'en'" class="text-sm font-semibold text-brand">
                     {{ item.nameTh }}
                   </p>
                   <p class="text-sm text-muted">{{ item.category }}</p>
@@ -398,40 +402,34 @@ async function removeItem(item) {
                     class="rounded-full border border-red-100 px-4 py-2 text-sm font-bold text-red-600 transition hover:bg-red-50 bg-white"
                     @click.stop="removeItem(item)"
                   >
-                    <Trash2 :size="16" class="inline" /> Delete
+                    <Trash2 :size="16" class="inline" /> {{ state.language === 'en' ? 'Delete' : 'ลบออก' }}
                   </button>
                 </div>
               </article>
             </div>
           </article>
 
-          <!-- RIGHT PART: Traditional Edit Item Panel (Tab-switching language) -->
           <form
-            class="section-card p-5 h-fit sticky top-6"
+            class="section-card p-5 sticky top-24 shadow-strong z-10 flex flex-col h-[calc(100vh-130px)] bg-white overflow-hidden"
             @submit.prevent="submitEdit"
           >
-            <div class="mb-4 flex items-center justify-between">
-              <h2 class="text-xl font-black">Edit Item</h2>
-              <span
-                class="rounded-full px-3 py-1 text-xs font-bold"
-                :class="
-                  complete
-                    ? 'bg-pale text-brand'
-                    : 'bg-orange-50 text-orange-700'
-                "
-                >{{ complete ? "Complete" : "Missing data" }}</span
-              >
-            </div>
-            <div class="grid gap-3">
+            <div class="flex-none border-b border-stone-100 pb-3">
+              <div class="flex items-center justify-between mb-3">
+                <h2 class="text-xl font-black">
+                  {{ state.language === 'en' ? 'Edit Item' : 'แก้ไขข้อมูลเมนู' }}
+                </h2>
+                <span
+                  class="rounded-full px-3 py-1 text-xs font-bold"
+                  :class="complete ? 'bg-pale text-brand' : 'bg-orange-50 text-orange-700'"
+                >
+                  {{ complete ? (state.language === 'en' ? "Complete" : "ข้อมูลครบถ้วน") : (state.language === 'en' ? "Missing data" : "ข้อมูลไม่ครบ") }}
+                </span>
+              </div>
               <div class="grid grid-cols-2 rounded-2xl bg-pale p-1">
                 <button
                   type="button"
                   class="rounded-xl px-4 py-2 text-sm font-black transition"
-                  :class="
-                    contentLanguage === 'en'
-                      ? 'bg-white text-brand shadow-sm'
-                      : 'text-muted'
-                  "
+                  :class="contentLanguage === 'en' ? 'bg-white text-brand shadow-sm' : 'text-muted'"
                   @click="contentLanguage = 'en'"
                 >
                   English
@@ -439,83 +437,32 @@ async function removeItem(item) {
                 <button
                   type="button"
                   class="rounded-xl px-4 py-2 text-sm font-black transition"
-                  :class="
-                    contentLanguage === 'th'
-                      ? 'bg-white text-brand shadow-sm'
-                      : 'text-muted'
-                  "
+                  :class="contentLanguage === 'th' ? 'bg-white text-brand shadow-sm' : 'text-muted'"
                   @click="contentLanguage = 'th'"
                 >
                   ภาษาไทย
                 </button>
               </div>
+            </div>
 
-              <!-- English Edit Fields -->
+            <div class="flex-1 overflow-y-auto py-4 pr-1 grid gap-4 content-start custom-scrollbar">
+              
               <div v-if="contentLanguage === 'en'" class="grid gap-3">
-                <input
-                  v-model="form.name"
-                  class="field"
-                  placeholder="English name"
-                />
-                <textarea
-                  v-model="form.description"
-                  class="field"
-                  placeholder="English description"
-                ></textarea>
-                <textarea
-                  v-model="form.ingredientsText"
-                  class="field"
-                  placeholder="English ingredients, comma separated"
-                ></textarea>
-                <input
-                  v-model="form.allergensText"
-                  class="field"
-                  placeholder="English allergens, comma separated"
-                />
-                <input
-                  v-model="form.dietaryText"
-                  class="field"
-                  placeholder="English dietary tags"
-                />
-                <input
-                  v-model="form.tasteText"
-                  class="field"
-                  placeholder="English taste profile"
-                />
+                <input v-model="form.name" class="field" placeholder="English name" />
+                <textarea v-model="form.description" class="field h-28" placeholder="English description"></textarea>
+                <textarea v-model="form.ingredientsText" class="field h-24" placeholder="English ingredients, comma separated"></textarea>
+                <input v-model="form.allergensText" class="field" placeholder="English allergens, comma separated" />
+                <input v-model="form.dietaryText" class="field" placeholder="English dietary tags" />
+                <input v-model="form.tasteText" class="field" placeholder="English taste profile" />
               </div>
 
-              <!-- Thai Edit Fields -->
               <div v-else class="grid gap-3">
-                <input
-                  v-model="form.nameTh"
-                  class="field"
-                  placeholder="ชื่อเมนูภาษาไทย"
-                />
-                <textarea
-                  v-model="form.descriptionTh"
-                  class="field"
-                  placeholder="คำอธิบายภาษาไทย"
-                ></textarea>
-                <textarea
-                  v-model="form.ingredientsThText"
-                  class="field"
-                  placeholder="วัตถุดิบภาษาไทย คั่นด้วยเครื่องหมายจุลภาค"
-                ></textarea>
-                <input
-                  v-model="form.allergensThText"
-                  class="field"
-                  placeholder="สารก่อภูมิแพ้ภาษาไทย"
-                />
-                <input
-                  v-model="form.dietaryThText"
-                  class="field"
-                  placeholder="แท็กประเภทอาหารภาษาไทย"
-                />
-                <input
-                  v-model="form.tasteThText"
-                  class="field"
-                  placeholder="รสชาติภาษาไทย"
-                />
+                <input v-model="form.nameTh" class="field" placeholder="ชื่อเมนูภาษาไทย" />
+                <textarea v-model="form.descriptionTh" class="field h-28" placeholder="คำอธิบายภาษาไทย"></textarea>
+                <textarea v-model="form.ingredientsThText" class="field h-24" placeholder="วัตถุดิบภาษาไทย คั่นด้วยเครื่องหมายจุลภาค"></textarea>
+                <input v-model="form.allergensThText" class="field" placeholder="สารก่อภูมิแพ้ภาษาไทย" />
+                <input v-model="form.dietaryThText" class="field" placeholder="แท็กประเภทอาหารภาษาไทย" />
+                <input v-model="form.tasteThText" class="field" placeholder="รสชาติภาษาไทย" />
               </div>
 
               <div class="grid gap-3 sm:grid-cols-2">
@@ -524,18 +471,11 @@ async function removeItem(item) {
                   <option>Main Courses</option>
                   <option>Drinks</option>
                 </select>
-                <input
-                  v-model="form.price"
-                  class="field"
-                  type="number"
-                  placeholder="Price"
-                />
+                <input v-model="form.price" class="field" type="number" placeholder="Price" />
               </div>
-              <input
-                v-model="form.image"
-                class="field"
-                placeholder="Image URL"
-              />
+              
+              <input v-model="form.image" class="field" placeholder="Image URL" />
+              
               <div class="grid gap-3 sm:grid-cols-2">
                 <select v-model="form.spiceLevel" class="field">
                   <option>None</option>
@@ -548,7 +488,12 @@ async function removeItem(item) {
                   <option value="sold_out">Sold out</option>
                 </select>
               </div>
-              <button class="primary-btn">Update Item Changes</button>
+            </div>
+
+            <div class="flex-none border-t border-stone-100 pt-3 bg-white">
+              <button class="primary-btn w-full bg-brand text-white py-3 font-bold rounded-2xl shadow-md transition hover:opacity-90">
+                {{ state.language === 'en' ? 'Update Item Changes' : 'บันทึกการแก้ไขเมนู' }}
+              </button>
             </div>
           </form>
         </section>
@@ -564,143 +509,53 @@ async function removeItem(item) {
         class="bg-white rounded-3xl shadow-2xl w-full max-w-7xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200"
         @submit.prevent="submitAdd"
       >
-        <div
-          class="border-b border-stone-100 p-5 flex items-center justify-between bg-stone-50"
-        >
+        <div class="border-b border-stone-100 p-5 flex items-center justify-between bg-stone-50">
           <div>
-            <h2 class="text-2xl font-black text-stone-800">
-              Add New Menu Item
-            </h2>
-            <p class="text-sm text-stone-500">
-              Fill out English content, Thai translations, and system
-              configuration.
-            </p>
+            <h2 class="text-2xl font-black text-stone-800">Add New Menu Item</h2>
+            <p class="text-sm text-stone-500">Fill out English content, Thai translations, and system configuration.</p>
           </div>
           <div class="flex items-center gap-3">
-            <span
-              class="rounded-full px-3 py-1 text-xs font-bold"
-              :class="
-                addComplete
-                  ? 'bg-emerald-50 text-emerald-700'
-                  : 'bg-orange-50 text-orange-700'
-              "
-            >
+            <span class="rounded-full px-3 py-1 text-xs font-bold" :class="addComplete ? 'bg-emerald-50 text-emerald-700' : 'bg-orange-50 text-orange-700'">
               {{ addComplete ? "Data Ready" : "Incomplete" }}
             </span>
-            <button
-              type="button"
-              class="text-stone-400 hover:text-stone-600 p-1"
-              @click="isModalOpen = false"
-            >
+            <button type="button" class="text-stone-400 hover:text-stone-600 p-1" @click="isModalOpen = false">
               <X :size="20" />
             </button>
           </div>
         </div>
 
-        <div
-          class="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6 overflow-y-auto bg-white divide-y lg:divide-y-0 lg:divide-x divide-stone-100"
-        >
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6 overflow-y-auto bg-white divide-y lg:divide-y-0 lg:divide-x divide-stone-100">
           <div class="grid gap-4 content-start lg:pr-2">
-            <h3 class="text-sm font-bold text-brand uppercase tracking-wider">
-              English Details
-            </h3>
-            <div
-              class="grid gap-2 border border-stone-100 p-4 rounded-2xl bg-stone-50/50 content-start"
-            >
-              <span class="text-xs font-bold text-stone-400 mb-1 block"
-                >ENGLISH</span
-              >
-              <input
-                v-model="addForm.name"
-                class="field"
-                placeholder="English name"
-                required
-              />
-              <textarea
-                v-model="addForm.description"
-                class="field h-20"
-                placeholder="English description"
-              ></textarea>
-              <textarea
-                v-model="addForm.ingredientsText"
-                class="field h-16"
-                placeholder="Ingredients (comma separated)"
-              ></textarea>
-              <input
-                v-model="addForm.allergensText"
-                class="field"
-                placeholder="Allergens (comma separated)"
-              />
-              <input
-                v-model="addForm.dietaryText"
-                class="field"
-                placeholder="Dietary tags"
-              />
-              <input
-                v-model="addForm.tasteText"
-                class="field"
-                placeholder="Taste profile"
-              />
+            <h3 class="text-sm font-bold text-brand uppercase tracking-wider">English Details</h3>
+            <div class="grid gap-2 border border-stone-100 p-4 rounded-2xl bg-stone-50/50 content-start">
+              <span class="text-xs font-bold text-stone-400 mb-1 block">ENGLISH</span>
+              <input v-model="addForm.name" class="field" placeholder="English name" required />
+              <textarea v-model="addForm.description" class="field h-20" placeholder="English description"></textarea>
+              <textarea v-model="addForm.ingredientsText" class="field h-16" placeholder="Ingredients (comma separated)"></textarea>
+              <input v-model="addForm.allergensText" class="field" placeholder="Allergens (comma separated)" />
+              <input v-model="addForm.dietaryText" class="field" placeholder="Dietary tags" />
+              <input v-model="addForm.tasteText" class="field" placeholder="Taste profile" />
             </div>
           </div>
 
           <div class="grid gap-4 pt-6 lg:pt-0 lg:px-4 content-start">
-            <h3 class="text-sm font-bold text-brand uppercase tracking-wider">
-              Thai Translations
-            </h3>
-            <div
-              class="grid gap-2 border border-stone-100 p-4 rounded-2xl bg-stone-50/50 content-start"
-            >
-              <span class="text-xs font-bold text-stone-400 mb-1 block"
-                >THAI LANGUAGE</span
-              >
-              <input
-                v-model="addForm.nameTh"
-                class="field"
-                placeholder="ชื่อเมนูภาษาไทย"
-                required
-              />
-              <textarea
-                v-model="addForm.descriptionTh"
-                class="field h-20"
-                placeholder="คำอธิบายภาษาไทย"
-              ></textarea>
-              <textarea
-                v-model="addForm.ingredientsThText"
-                class="field h-16"
-                placeholder="วัตถุดิบภาษาไทย (คั่นด้วยเครื่องหมายจุลภาค)"
-              ></textarea>
-              <input
-                v-model="addForm.allergensThText"
-                class="field"
-                placeholder="สารก่อภูมิแพ้ภาษาไทย"
-              />
-              <input
-                v-model="addForm.dietaryThText"
-                class="field"
-                placeholder="แท็กประเภทอาหารภาษาไทย"
-              />
-              <input
-                v-model="addForm.tasteThText"
-                class="field"
-                placeholder="รสชาติภาษาไทย"
-              />
+            <h3 class="text-sm font-bold text-brand uppercase tracking-wider">Thai Translations</h3>
+            <div class="grid gap-2 border border-stone-100 p-4 rounded-2xl bg-stone-50/50 content-start">
+              <span class="text-xs font-bold text-stone-400 mb-1 block">THAI LANGUAGE</span>
+              <input v-model="addForm.nameTh" class="field" placeholder="ชื่อเมนูภาษาไทย" required />
+              <textarea v-model="addForm.descriptionTh" class="field h-20" placeholder="คำอธิบายภาษาไทย"></textarea>
+              <textarea v-model="addForm.ingredientsThText" class="field h-16" placeholder="วัตถุดิบภาษาไทย (คั่นด้วยเครื่องหมายจุลภาค)"></textarea>
+              <input v-model="addForm.allergensThText" class="field" placeholder="สารก่อภูมิแพ้ภาษาไทย" />
+              <input v-model="addForm.dietaryThText" class="field" placeholder="แท็กประเภทอาหารภาษาไทย" />
+              <input v-model="addForm.tasteThText" class="field" placeholder="รสชาติภาษาไทย" />
             </div>
           </div>
 
           <div class="grid gap-4 pt-6 lg:pt-0 lg:pl-6 content-start">
-            <h3
-              class="text-sm font-bold text-stone-500 uppercase tracking-wider"
-            >
-              System Configuration
-            </h3>
-            <div
-              class="grid gap-4 border border-stone-100 p-4 rounded-2xl bg-stone-50/50 content-start"
-            >
+            <h3 class="text-sm font-bold text-stone-500 uppercase tracking-wider">System Configuration</h3>
+            <div class="grid gap-4 border border-stone-100 p-4 rounded-2xl bg-stone-50/50 content-start">
               <div>
-                <label class="text-xs font-bold text-stone-400 mb-1 block"
-                  >Category</label
-                >
+                <label class="text-xs font-bold text-stone-400 mb-1 block">Category</label>
                 <select v-model="addForm.category" class="field">
                   <option>Starters</option>
                   <option>Main Courses</option>
@@ -709,44 +564,21 @@ async function removeItem(item) {
               </div>
 
               <div>
-                <label class="text-xs font-bold text-stone-400 mb-1 block"
-                  >Price (Baht)</label
-                >
-                <input
-                  v-model="addForm.price"
-                  class="field"
-                  type="number"
-                  placeholder="Price"
-                  required
-                />
+                <label class="text-xs font-bold text-stone-400 mb-1 block">Price (Baht)</label>
+                <input v-model="addForm.price" class="field" type="number" placeholder="Price" required />
               </div>
 
               <div>
-                <label class="text-xs font-bold text-stone-400 mb-1 block"
-                  >Image URL</label
-                >
-                <input
-                  v-model="addForm.image"
-                  class="field"
-                  placeholder="https://images.unsplash.com/..."
-                />
-                <div
-                  v-if="addForm.image"
-                  class="mt-2 h-28 w-full rounded-xl overflow-hidden border border-stone-200"
-                >
-                  <img
-                    :src="addForm.image"
-                    class="h-full w-full object-cover"
-                    alt="Preview"
-                  />
+                <label class="text-xs font-bold text-stone-400 mb-1 block">Image URL</label>
+                <input v-model="addForm.image" class="field" placeholder="https://images.unsplash.com/..." />
+                <div v-if="addForm.image" class="mt-2 h-28 w-full rounded-xl overflow-hidden border border-stone-200">
+                  <img :src="addForm.image" class="h-full w-full object-cover" alt="Preview" />
                 </div>
               </div>
 
               <div class="grid grid-cols-2 gap-3 mt-1">
                 <div>
-                  <label class="text-xs font-bold text-stone-400 mb-1 block"
-                    >Spice Level</label
-                  >
+                  <label class="text-xs font-bold text-stone-400 mb-1 block">Spice Level</label>
                   <select v-model="addForm.spiceLevel" class="field">
                     <option>None</option>
                     <option>Mild</option>
@@ -755,9 +587,7 @@ async function removeItem(item) {
                   </select>
                 </div>
                 <div>
-                  <label class="text-xs font-bold text-stone-400 mb-1 block"
-                    >Availability</label
-                  >
+                  <label class="text-xs font-bold text-stone-400 mb-1 block">Availability</label>
                   <select v-model="addForm.availability" class="field">
                     <option value="available">Available</option>
                     <option value="sold_out">Sold out</option>
@@ -768,19 +598,9 @@ async function removeItem(item) {
           </div>
         </div>
 
-        <div
-          class="border-t border-stone-100 p-4 bg-stone-50 flex items-center justify-end gap-3"
-        >
-          <button
-            type="button"
-            class="secondary-btn px-5 py-2.5"
-            @click="isModalOpen = false"
-          >
-            Cancel
-          </button>
-          <button type="submit" class="primary-btn px-6 py-2.5">
-            Create New Item
-          </button>
+        <div class="border-t border-stone-100 p-4 bg-stone-50 flex items-center justify-end gap-3">
+          <button type="button" class="secondary-btn px-5 py-2.5" @click="isModalOpen = false">Cancel</button>
+          <button type="submit" class="primary-btn px-6 py-2.5">Create New Item</button>
         </div>
       </form>
     </div>

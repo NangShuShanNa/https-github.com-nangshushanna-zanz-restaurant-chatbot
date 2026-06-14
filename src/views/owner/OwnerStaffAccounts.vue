@@ -44,35 +44,30 @@ const editingStaff = reactive({
 });
 
 /**
- * Fetches all necessary data on initialization
+ * Fetches all necessary staff data based on the currently logged-in user from localStorage
  */
 async function fetchStaffData() {
   isLoading.value = true;
   try {
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) throw new Error("Please log in again.");
+    // 1. Retrieve the active user session data from localStorage saved during login
+    const savedUserJson = localStorage.getItem("zank-active-user");
+    
+    if (!savedUserJson) throw new Error("Please log in again.");
+    
+    const activeUser = JSON.parse(savedUserJson);
 
-    currentOwnerId.value = user.id;
+    // 2. Map session payload directly to reactive parameters without relying on old Supabase Auth state
+    currentOwnerId.value = activeUser.id;
+    restaurantId.value = activeUser.restaurant_id || "";
+    restaurantName.value = activeUser.restaurant_name || "Zank Restaurant";
 
-    const { data: ownerProfile, error: profileError } = await supabase
-      .from("profiles")
-      .select("restaurant_id, restaurant_name")
-      .eq("id", user.id)
-      .single();
-
-    if (profileError) throw profileError;
-
-    if (ownerProfile) {
-      restaurantId.value = ownerProfile.restaurant_id || "";
-      restaurantName.value = ownerProfile.restaurant_name || "Zank Restaurant";
-    }
-
+    // 3. Query all staff members associated with the current restaurant_id
     if (restaurantId.value) {
       const { data: staffData, error: staffError } = await supabase
         .from("profiles")
         .select("*")
         .eq("restaurant_id", restaurantId.value)
-        .neq("role", "admin");
+        .neq("role", "admin"); // Exclude admin/owner accounts from the staff list
 
       if (staffError) throw staffError;
 
