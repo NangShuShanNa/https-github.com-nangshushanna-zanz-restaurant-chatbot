@@ -7,20 +7,18 @@ import { supabase } from "../../supabaseClient";
 import { useAppState } from "../../services/appState";
 
 const props = defineProps({
-  type: { type: String, required: true }, // Expects 'owner' or 'staff'
+  type: { type: String, required: true }, 
 });
 
 const router = useRouter();
 const { state } = useAppState();
 
-// Form states
 const email = ref("");
 const password = ref("");
 const showPassword = ref(false);
 const showError = ref(false);
 const errorMessage = ref("Invalid email or password.");
 
-// Dynamic text indicators based on role type
 const title = computed(() =>
   props.type === "owner" ? "Admin Login" : "Staff Login",
 );
@@ -33,12 +31,10 @@ const target = computed(() =>
   props.type === "owner" ? "/owner/dashboard" : "/staff/live-orders",
 );
 
-// Dynamic grey placeholder example inside the input box
 const emailPlaceholder = computed(() =>
   props.type === "owner" ? "e.g., admin@zank.com" : "e.g., kitchen@zank.com",
 );
 
-// Watchers: Prevent Thai/special character input issues and avoid v-model race conditions
 watch(email, (newValue) => {
   email.value = newValue.replace(/[^a-zA-Z0-9@._+-]/g, "");
 });
@@ -54,7 +50,6 @@ async function submit() {
   try {
     showError.value = false;
 
-    // 1. Basic format validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email.value)) {
       errorMessage.value =
@@ -69,69 +64,69 @@ async function submit() {
       return;
     }
 
-    console.log("Checking custom credentials for:", email.value);
-    console.log("กำลังจะยิงไปดึงข้อมูลจาก Supabase...");
+    console.log("-----------------------------------------");
+    console.log("Checking credentials via RPC for:", email.value);
 
-    // 2. Fetch the user record from public.profiles by email
     const { data: profileData, error: profileError } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("email", email.value)
+      .rpc("verify_staff_login", {
+        user_email: email.value,
+        input_password: password.value,
+      })
       .maybeSingle();
 
-    console.log("ผลลัพธ์จาก Supabase กลับมาแล้ว!"); // <--- เพิ่มเช็คว่าข้าม await มาได้ไหม
-    console.log("Data:", profileData, "Error:", profileError);
+    console.log("Response received from Supabase RPC");
 
     if (profileError) {
+      console.error("Supabase RPC Error:", profileError);
       errorMessage.value = "An error occurred while accessing the database.";
       throw profileError;
     }
 
-    // 3. Verify if user exists
     if (!profileData) {
+      console.warn("Authentication failed: invalid email or password hash mismatch");
       errorMessage.value = "Invalid email or password.";
       showError.value = true;
       return;
     }
 
-    // 4. Verify password (Dynamic approach - works for any account)
-    const isPasswordValid =
-      profileData.password_hash && profileData.password_hash === password.value;
+    console.log("Profile authenticated successfully:", profileData);
 
-    if (!isPasswordValid) {
-      errorMessage.value = "Invalid email or password.";
-      showError.value = true;
-      return;
-    }
-
-    // 5. Enforce role restrictions (Prevent staff from accessing admin, and vice versa)
     const currentRole = profileData.role;
-    const expectedRole = props.type === "owner" ? "admin" : "staff";
+    let isRoleValid = false;
 
-    if (currentRole !== expectedRole) {
+    if (props.type === "owner") {
+      isRoleValid = currentRole === "admin";
+    } else if (props.type === "staff") {
+      isRoleValid = ["kitchen_staff", "reception_staff"].includes(currentRole);
+    }
+
+    console.log("Role Restrictions Verification");
+    console.log("User Role:", currentRole);
+    console.log("Login Type:", props.type);
+    console.log("Role access authorization:", isRoleValid);
+
+    if (!isRoleValid) {
       errorMessage.value = `This account does not have permission to access the ${title.value}.`;
       showError.value = true;
       return;
     }
 
-    // 6. Complete successful session mappings
     const userData = {
       id: profileData.id,
       email: profileData.email,
-      role: currentRole,
+      role: currentRole, 
       restaurant_id: profileData.restaurant_id,
       restaurant_name: profileData.restaurant_name,
     };
 
     state.activeUser = userData;
 
-    // Save persistent authentication details to localStorage
     localStorage.setItem("zank-active-user", JSON.stringify(userData));
 
     console.log("CUSTOM LOGIN SUCCESS");
     console.log("USER SESSION REGISTERED:", userData);
+    console.log("-----------------------------------------");
 
-    // Redirect user to their corresponding dashboard route
     router.push(target.value);
   } catch (error) {
     console.error("Login verification exception error:", error);
@@ -139,7 +134,6 @@ async function submit() {
   }
 }
 
-// Clear legacy sessions when hitting the login screen component mount
 onMounted(() => {
   if (state.activeUser) {
     state.activeUser = null;
