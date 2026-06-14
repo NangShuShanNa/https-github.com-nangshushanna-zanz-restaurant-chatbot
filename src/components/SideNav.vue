@@ -25,7 +25,8 @@ defineProps({
 
 const router = useRouter();
 
-const { t, signOut } = useAppState();
+// 🌟 ดึง state เข้ามาร่วมด้วยเพื่อให้หน้าจอนี้อัปเดตแบบ Dynamic ตามปุ่มด้านบน
+const { state, t, signOut } = useAppState();
 
 const showLogoutModal = ref(false);
 
@@ -55,11 +56,8 @@ function handleNavClick(item, event) {
 
 function confirmLogout() {
   signOut();
-
   localStorage.removeItem("zank-active-user");
-
   showLogoutModal.value = false;
-
   router.push("/");
 }
 
@@ -74,18 +72,16 @@ function cancelLogout() {
   >
     <nav class="space-y-2">
       <template v-for="item in items" :key="item.label">
-        <!-- Logout -->
         <button
           v-if="item.label === 'Logout'"
           @click="showLogoutModal = true"
           class="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold text-stone-700 transition hover:bg-pale"
         >
           <component :is="iconMap[item.label] || Home" :size="20" />
-
-          {{ t(item.label) }}
+          
+          {{ state.language === 'en' ? 'Logout' : 'ออกจากระบบ' }}
         </button>
 
-        <!-- Other Menu -->
         <RouterLink
           v-else
           :to="item.to"
@@ -94,7 +90,13 @@ function cancelLogout() {
         >
           <component :is="iconMap[item.label] || Home" :size="20" />
 
-          {{ t(item.label) }}
+          {{ 
+            item.label === 'Dashboard' ? (state.language === 'en' ? 'Dashboard' : 'หน้าหลัก') :
+            item.label === 'Menu Management' ? (state.language === 'en' ? 'Menu Management' : 'จัดการเมนูอาหาร') :
+            item.label === 'Orders' ? (state.language === 'en' ? 'Orders' : 'คำสั่งซื้อ') :
+            item.label === 'Staff Accounts' ? (state.language === 'en' ? 'Staff Accounts' : 'บัญชีพนักงาน') : 
+            t(item.label)
+          }}
         </RouterLink>
       </template>
     </nav>
@@ -107,31 +109,33 @@ function cancelLogout() {
       {{ t(bottomLabel) }}
     </RouterLink>
 
-    <!-- Logout Modal -->
     <div
       v-if="showLogoutModal"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs"
     >
-      <div class="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl">
-        <h2 class="text-lg font-black text-red-600">Confirm Logout</h2>
+      <div class="w-full max-w-md rounded-3xl bg-white p-6 shadow-xl animate-in fade-in zoom-in-95 duration-150">
+        <h2 class="text-lg font-black text-red-600">
+          {{ state.language === 'en' ? 'Confirm Logout' : 'ยืนยันออกจากระบบ' }}
+        </h2>
 
-        <p class="mt-3 text-sm text-stone-600">
-          Are you sure you want to log out?
-
-          <br />
-          You will need to sign in again.
+        <p class="mt-3 text-sm text-stone-600 leading-relaxed">
+          {{ 
+            state.language === 'en' 
+              ? 'Are you sure you want to log out? You will need to sign in again.' 
+              : 'คุณต้องการออกจากระบบใช่หรือไม่? คุณจำเป็นต้องกรอกรหัสเข้าสู่ระบบใหม่อีกครั้งเพื่อใช้งาน' 
+          }}
         </p>
 
         <div class="mt-6 flex justify-end gap-3">
-          <button class="rounded-xl border px-4 py-2" @click="cancelLogout">
-            Cancel
+          <button class="rounded-xl border border-stone-200 px-4 py-2 font-medium text-stone-600 hover:bg-stone-50" @click="cancelLogout">
+            {{ state.language === 'en' ? 'Cancel' : 'ยกเลิก' }}
           </button>
 
           <button
-            class="rounded-xl bg-red-600 px-4 py-2 text-white"
+            class="rounded-xl bg-red-600 px-4 py-2 font-semibold text-white shadow-md hover:bg-red-700 active:scale-95 transition-all"
             @click="confirmLogout"
           >
-            Logout
+            {{ state.language === 'en' ? 'Logout' : 'ออกจากระบบ' }}
           </button>
         </div>
       </div>

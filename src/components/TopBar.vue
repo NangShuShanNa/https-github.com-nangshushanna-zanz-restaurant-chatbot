@@ -1,74 +1,84 @@
 <script setup>
-import { computed, ref, onMounted } from 'vue'
-import { Globe2, ShoppingCart, UserCircle, LogOut } from '@lucide/vue'
-import AppLogo from './AppLogo.vue'
-import { useAppState } from '../services/appState'
-import { supabase } from '../supabaseClient'
-import { useRouter } from 'vue-router'
+import { computed, ref, onMounted } from "vue";
+import { Globe2, ShoppingCart, UserCircle, LogOut } from "@lucide/vue";
+import AppLogo from "./AppLogo.vue";
+import { useAppState } from "../services/appState";
+import { supabase } from "../supabaseClient";
+import { useRouter } from "vue-router";
 
 defineProps({
   cartCount: { type: Number, default: 0 },
-  modelValue: { type: String, default: '' },
-  searchPlaceholder: { type: String, default: 'Search dishes, ingredients, or taste' },
+  modelValue: { type: String, default: "" },
+  searchPlaceholder: {
+    type: String,
+    default: "Search dishes, ingredients, or taste",
+  },
   owner: { type: Boolean, default: false },
-})
+});
 
-defineEmits(['update:modelValue'])
+defineEmits(["update:modelValue"]);
 
-const router = useRouter()
-const { state, toggleLanguage, t } = useAppState()
+const router = useRouter();
+const { state, toggleLanguage: baseToggleLanguage } = useAppState();
 
-const userEmail = ref("")
-const dbRole = ref("")
+const userEmail = ref("");
+const dbRole = ref("");
+
+/**
+ * Custom toggle language function that also persists the choice globally across screens
+ */
+function handleToggleLanguage() {
+  // 1. Execute the state manager's original translation switch
+  baseToggleLanguage();
+
+  // 2. Persist the updated configuration state globally into localStorage
+  localStorage.setItem("zank-language", state.language);
+}
 
 const accountLabel = computed(() => {
-  const role = dbRole.value?.toLowerCase()
-  if (role === 'admin' || role === 'owner') {
-    return state.language === 'en' ? 'Owner / Admin' : 'เจ้าของร้าน / แอดมิน'
+  const role = dbRole.value?.toLowerCase();
+  if (role === "admin" || role === "owner") {
+    return state.language === "en" ? "Owner / Admin" : "เจ้าของร้าน / แอดมิน";
   }
-  if (role === 'staff') {
-    return state.language === 'en' ? 'Staff' : 'พนักงาน'
+  if (role === "staff") {
+    return state.language === "en" ? "Staff" : "พนักงาน";
   }
-  return state.language === 'en' ? 'Customer' : 'ลูกค้าทั่วไป'
-})
+  return state.language === "en" ? "Customer" : "ลูกค้าทั่วไป";
+});
 
 async function fetchUserData() {
   try {
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError) throw authError;
+    // Sync language selection from previous global layout configurations
+    const savedLanguage = localStorage.getItem("zank-language");
+    if (savedLanguage && state.language !== savedLanguage) {
+      state.language = savedLanguage;
+    }
 
-    if (user) {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("email, role")
-        .eq("id", user.id)
-        .single();
+    // Retrieve global authentication session payload mappings
+    const savedUserJson = localStorage.getItem("zank-active-user");
 
-      if (error) throw error;
+    if (savedUserJson) {
+      const localUser = JSON.parse(savedUserJson);
 
-      if (data) {
-        userEmail.value = data.email || user.email;
-        dbRole.value = data.role || "customer";
-      }
+      userEmail.value = localUser.email;
+      dbRole.value = localUser.role || "customer";
+      state.activeUser = localUser;
     } else {
-      userEmail.value = state.language === 'en' ? 'Guest' : 'ลูกค้าทั่วไป';
+      userEmail.value = state.language === "en" ? "Guest" : "ลูกค้าทั่วไป";
       dbRole.value = "customer";
     }
   } catch (error) {
-    console.error("Error fetching user data from table:", error.message);
-    userEmail.value = state.language === 'en' ? 'Guest' : 'ลูกค้าทั่วไป';
+    console.error("Error fetching user data from localStorage:", error);
+    userEmail.value = state.language === "en" ? "Guest" : "ลูกค้าทั่วไป";
     dbRole.value = "customer";
   }
 }
 
 async function handleLogout() {
-  const { error } = await supabase.auth.signOut();
-  if (!error) {
-    router.push("/");
-  } else {
-    console.error(error.message);
-  }
+  localStorage.removeItem("zank-active-user");
+  state.activeUser = null;
+  await supabase.auth.signOut();
+  router.push("/");
 }
 
 onMounted(() => {
@@ -77,20 +87,49 @@ onMounted(() => {
 </script>
 
 <template>
-  <header class="sticky top-0 z-20 flex h-20 items-center justify-between border-b border-stone-100 bg-white/95 px-5 backdrop-blur">
-    
+  <header
+    class="sticky top-0 z-20 flex h-20 items-center justify-between border-b border-stone-100 bg-white/95 px-5 backdrop-blur"
+  >
     <div class="flex items-center gap-4">
-      <AppLogo :to="dbRole?.toLowerCase() === 'admin' || dbRole?.toLowerCase() === 'owner' ? '/owner/dashboard' : '/'" />
+      <AppLogo
+        :to="
+          dbRole?.toLowerCase() === 'admin' || dbRole?.toLowerCase() === 'owner'
+            ? '/owner/dashboard'
+            : '/'
+        "
+      />
     </div>
 
     <div class="flex items-center gap-4">
-      
-      <button class="hidden items-center gap-2 rounded-full px-3 py-2 text-sm font-semibold text-stone-700 transition hover:bg-pale sm:flex" @click="toggleLanguage">
+      <button
+        class="hidden items-center gap-2 rounded-full px-3 py-2 text-sm text-stone-700 transition hover:bg-pale sm:flex"
+        @click="handleToggleLanguage"
+      >
         <Globe2 :size="20" />
-        <span>{{ state.language === 'en' ? 'EN / TH' : 'TH / EN' }}</span>
+        <span class="flex gap-1">
+          <span
+            :class="
+              state.language === 'en'
+                ? 'font-black text-stone-900'
+                : 'font-normal text-stone-400'
+            "
+            >EN</span
+          >
+
+          <span class="text-stone-300">/</span>
+
+          <span
+            :class="
+              state.language === 'th'
+                ? 'font-black text-stone-900'
+                : 'font-normal text-stone-400'
+            "
+            >TH</span
+          >
+        </span>
       </button>
 
-      <RouterLink
+      <!-- <RouterLink
         v-if="dbRole?.toLowerCase() !== 'admin' && dbRole?.toLowerCase() !== 'owner' && dbRole?.toLowerCase() !== 'staff'"
         to="/customer/cart"
         class="relative z-30 inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-stone-900 transition hover:bg-pale focus:outline-none focus:ring-2 focus:ring-brand/40"
@@ -99,17 +138,23 @@ onMounted(() => {
       >
         <ShoppingCart :size="25" />
         <span v-if="cartCount" class="absolute -right-2 -top-2 grid h-5 w-5 place-items-center rounded-full bg-brand text-xs font-bold text-white">{{ cartCount }}</span>
-      </RouterLink>
+      </RouterLink> -->
 
-      <div class="relative flex items-center gap-2 rounded-full border border-stone-100 p-3 pr-4 bg-stone-50">
-        
+      <div
+        class="relative flex items-center gap-2 rounded-full border border-stone-100 p-3 pr-4 bg-stone-50"
+      >
         <div class="rounded-full text-stone-600">
           <UserCircle :size="30" />
         </div>
-        
+
         <div class="hidden flex-col text-left leading-tight md:flex">
-          <span class="text-sm font-bold text-stone-900 max-w-[150px] truncate">{{ userEmail }}</span>
-          <span class="text-xs font-medium text-stone-500">{{ accountLabel }}</span>
+          <span
+            class="text-sm font-bold text-stone-900 max-w-[150px] truncate"
+            >{{ userEmail }}</span
+          >
+          <span class="text-xs font-medium text-stone-500">{{
+            accountLabel
+          }}</span>
         </div>
       </div>
     </div>

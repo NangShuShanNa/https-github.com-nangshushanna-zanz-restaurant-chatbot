@@ -57,9 +57,10 @@ async function submit() {
     // 1. Basic format validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email.value)) {
-      errorMessage.value = "Please enter a valid email address format (e.g., user@example.com).";
+      errorMessage.value =
+        "Please enter a valid email address format (e.g., user@example.com).";
       showError.value = true;
-      return; 
+      return;
     }
 
     if (!password.value) {
@@ -69,6 +70,7 @@ async function submit() {
     }
 
     console.log("Checking custom credentials for:", email.value);
+    console.log("กำลังจะยิงไปดึงข้อมูลจาก Supabase...");
 
     // 2. Fetch the user record from public.profiles by email
     const { data: profileData, error: profileError } = await supabase
@@ -76,6 +78,9 @@ async function submit() {
       .select("*")
       .eq("email", email.value)
       .maybeSingle();
+
+    console.log("ผลลัพธ์จาก Supabase กลับมาแล้ว!"); // <--- เพิ่มเช็คว่าข้าม await มาได้ไหม
+    console.log("Data:", profileData, "Error:", profileError);
 
     if (profileError) {
       errorMessage.value = "An error occurred while accessing the database.";
@@ -89,11 +94,9 @@ async function submit() {
       return;
     }
 
-    // 4. Verify password hash 
-    // Fallback simple validation mechanism for custom credentials handling
-    const isPasswordValid = password.value === "jay1234" && profileData.email === "jay@velco.com" 
-      ? true 
-      : profileData.password_hash === password.value; 
+    // 4. Verify password (Dynamic approach - works for any account)
+    const isPasswordValid =
+      profileData.password_hash && profileData.password_hash === password.value;
 
     if (!isPasswordValid) {
       errorMessage.value = "Invalid email or password.";
@@ -175,10 +178,10 @@ onMounted(() => {
             class="mt-2 flex items-center gap-2 rounded-2xl border border-stone-200 px-4 py-3"
           >
             <Mail :size="18" class="text-muted" />
-            <input 
-              v-model="email" 
-              class="w-full outline-none" 
-              type="email" 
+            <input
+              v-model="email"
+              class="w-full outline-none"
+              type="email"
               :placeholder="emailPlaceholder"
             />
           </span>
@@ -212,11 +215,11 @@ onMounted(() => {
             </button>
           </span>
         </label>
-        
+
         <p v-if="showError" class="text-sm font-semibold text-red-600">
           {{ errorMessage }}
         </p>
-        
+
         <label class="flex items-center gap-2 text-sm text-muted">
           <input type="checkbox" />
           Remember me
