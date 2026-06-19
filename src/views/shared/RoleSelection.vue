@@ -1,5 +1,6 @@
 <script setup>
 import { ClipboardList, Lock, Monitor, Utensils } from '@lucide/vue'
+import { RouterLink } from 'vue-router'
 import { computed } from 'vue'
 import AppLogo from '../../components/AppLogo.vue'
 import { useAppState } from '../../services/appState'

@@ -69,9 +69,25 @@ const router = createRouter({
 router.beforeEach((to) => {
   const { state } = useAppState();
 
-  const publicPages = ["/", "/owner/login", "/staff/login", "/forgot-password"];
+  const publicPages = [
+    "/",
+    "/owner/login",
+    "/staff/login",
+    "/forgot-password",
+    "/customer/menu",
+    "/customer/cart",
+    "/customer/order-status",
+  ];
 
-  if (!publicPages.includes(to.path) && !state.activeUser) {
+  const isPublicDynamicPage = to.path.startsWith(
+    "/customer/order-confirmation/",
+  );
+
+  if (
+    !publicPages.includes(to.path) &&
+    !isPublicDynamicPage &&
+    !state.activeUser
+  ) {
     return "/";
   }
 });
