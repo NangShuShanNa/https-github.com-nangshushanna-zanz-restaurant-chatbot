@@ -12,10 +12,11 @@ import {
   Users,
   History,
   LayoutDashboard,
+  LayoutGrid,
 } from "@lucide/vue";
 
-import { ref } from "vue";
-import { useRouter } from "vue-router";
+import { ref, computed } from "vue";
+import { useRouter, useRoute } from "vue-router";
 import { useAppState } from "../services/appState";
 
 defineProps({
@@ -24,13 +25,19 @@ defineProps({
 });
 
 const router = useRouter();
+const route = useRoute();
 
-// 🌟 ดึง state เข้ามาร่วมด้วยเพื่อให้หน้าจอนี้อัปเดตแบบ Dynamic ตามปุ่มด้านบน
-const { state, t, signOut } = useAppState();
+const { state, cartItems, t, signOut } = useAppState();
 
 const showLogoutModal = ref(false);
 
+const totalCartCount = computed(() => {
+  const cart = state.cart || [];
+  return cart.reduce((total, item) => total + (item.quantity || 0), 0);
+});
+
 const iconMap = {
+  All: LayoutGrid,
   Starters: Utensils,
   "Main Courses": Soup,
   Drinks: Wine,
@@ -67,29 +74,65 @@ function confirmLogout() {
 function cancelLogout() {
   showLogoutModal.value = false;
 }
+
+function isCustomerItemActive(item) {
+  if (route.path === "/customer/menu") {
+    const queryCategory = route.query.category;
+
+    if (item.label === "All")
+      return (
+        queryCategory === undefined ||
+        queryCategory === null ||
+        queryCategory === ""
+      );
+    if (item.label === "Starters") return queryCategory === "Starters";
+    if (item.label === "Main Courses") return queryCategory === "Main Courses";
+    if (item.label === "Drinks")
+      return queryCategory === "Drink" || queryCategory === "Drinks";
+  }
+  return route.path === item.to;
+}
+
 </script>
 
 <template>
   <aside
-    class="hidden w-64 shrink-0 rounded-r-3xl bg-white p-5 shadow-soft lg:flex lg:flex-col"
+    class="sticky top-20 hidden w-64 shrink-0 flex-col justify-between rounded-r-3xl bg-white p-5 shadow-soft h-[calc(100vh-5rem)] lg:flex"
   >
-    <nav class="space-y-2">
+    <div class="flex-1 overflow-y-auto pr-1 space-y-2 custom-scrollbar">
+      <RouterLink
+        v-if="route.path.startsWith('/customer/')"
+        to="/customer/menu"
+        class="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-stone-700 transition-all duration-200 hover:bg-softGreen/50"
+        :class="
+          isCustomerItemActive({ label: 'All' })
+            ? 'bg-softGreen text-stone-950 font-black shadow-xs ring-1 ring-brand/10'
+            : 'text-stone-600 bg-transparent'
+        "
+      >
+        <component :is="iconMap['All']" :size="20" />
+        {{ state.language === "en" ? "All Menu" : "เมนูทั้งหมด" }}
+      </RouterLink>
+
       <template v-for="item in items" :key="item.label">
         <button
           v-if="item.label === 'Logout'"
           @click="showLogoutModal = true"
-          class="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold text-stone-700 transition hover:bg-pale"
+          class="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-semibold text-stone-700 transition-all duration-200 hover:bg-red-50 hover:text-red-600"
         >
           <component :is="iconMap[item.label] || Home" :size="20" />
-
           {{ state.language === "en" ? "Logout" : "ออกจากระบบ" }}
         </button>
 
         <RouterLink
           v-else
           :to="item.to"
-          class="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-stone-700 transition hover:bg-pale"
-          active-class="bg-softGreen text-stone-950"
+          class="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold text-stone-600 transition-all duration-200 hover:bg-softGreen/50"
+          :class="
+            isCustomerItemActive(item)
+              ? 'bg-softGreen text-stone-950 font-black shadow-xs ring-1 ring-brand/10'
+              : 'text-stone-600 bg-transparent'
+          "
         >
           <component :is="iconMap[item.label] || Home" :size="20" />
 
@@ -114,15 +157,24 @@ function cancelLogout() {
           }}
         </RouterLink>
       </template>
-    </nav>
+    </div>
 
-    <RouterLink
-      v-if="bottomLabel"
-      to="/customer/menu"
-      class="mt-auto rounded-full bg-brand px-5 py-3 text-center text-sm font-bold text-white shadow-soft"
-    >
-      {{ t(bottomLabel) }}
-    </RouterLink>
+    <div class="mt-4 pt-4 border-t border-stone-50 shrink-0">
+      <RouterLink
+        v-if="bottomLabel"
+        to="/customer/cart"
+        class="relative flex items-center justify-center gap-2 w-full rounded-full bg-brand px-5 py-3 text-center text-sm font-bold text-white shadow-soft transition-all active:scale-95 hover:bg-brand/90"
+      >
+        <span>{{ t(bottomLabel) }}</span>
+
+        <span
+          v-if="totalCartCount > 0"
+          class="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-white px-1 text-[10px] font-black text-brand ring-2 ring-brand/20 animate-in scale-in duration-200"
+        >
+          {{ totalCartCount }}
+        </span>
+      </RouterLink>
+    </div>
 
     <div
       v-if="showLogoutModal"

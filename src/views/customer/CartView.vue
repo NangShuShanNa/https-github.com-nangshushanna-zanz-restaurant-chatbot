@@ -6,7 +6,7 @@ import MobileNav from '../../components/MobileNav.vue'
 import QuantityControl from '../../components/QuantityControl.vue'
 import SideNav from '../../components/SideNav.vue'
 import TagList from '../../components/TagList.vue'
-import TopBar from '../../components/TopBar.vue'
+import TopBar from "../../components/TopBarCustomer.vue";
 import ChatPanel from '../../components/ChatPanel.vue'
 import { useAppState } from '../../services/appState'
 
@@ -47,13 +47,27 @@ function submitOrder() {
   const order = createOrder({ tableNumber: tableNumber.value, customerNote: customerNote.value })
   router.push(`/customer/order-confirmation/${order.orderNumber}`)
 }
+
+function handleBackToMenu() {
+  state.selectedCategory = 'All'
+  router.push('/customer/menu')
+}
+
+const totalCartQuantity = computed(() => {
+  return cartItems.value.reduce((total, item) => total + item.quantity, 0);
+});
+
 </script>
 
 <template>
   <div class="page-shell">
-    <TopBar :cart-count="cartItems.length" />
+    <TopBar v-model="search" :cart-count="totalCartQuantity" />
     <div class="content-shell">
-      <SideNav :items="navItems" bottom-label="Back to Menu" />
+      <SideNav 
+        :items="navItems" 
+        bottom-label="Back to Menu" 
+        @click="handleBackToMenu"
+      />
       <main class="main-panel">
         <div class="grid gap-6 xl:grid-cols-[1fr_360px]">
           <section>
