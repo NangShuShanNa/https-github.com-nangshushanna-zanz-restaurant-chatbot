@@ -35,10 +35,9 @@ async function fetchTableData() {
       state.language = savedLanguage;
     }
 
-    const savedTable = localStorage.getItem("zank-table-number");
-    if (savedTable) {
-      tableNumber.value = savedTable;
-    }
+    tableNumber.value = "24"; 
+    localStorage.setItem("zank-table-number", "24");
+    
   } catch (error) {
     console.error("Error syncing table data:", error);
   }

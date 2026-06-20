@@ -24,7 +24,7 @@ const routes = [
   { path: "/customer/menu", component: CustomerMenu },
   { path: "/customer/cart", component: CartView },
   {
-    path: "/customer/order-confirmation/:orderNumber",
+    path: "/customer/order-confirmation/:orderId",
     component: OrderConfirmation,
   },
   { path: "/customer/order-status", component: OrderStatus },
