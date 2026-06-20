@@ -1,15 +1,119 @@
 <script setup>
-import { computed, ref, onMounted } from "vue";
+import { computed, ref, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
-import { Globe2, ShoppingCart, UserCircle } from "@lucide/vue";
 import MobileNav from "../../components/MobileNav.vue";
 import SideNav from "../../components/SideNav.vue";
 import StatusPill from "../../components/StatusPill.vue";
 import TopBar from "../../components/TopBar.vue";
 import { useAppState } from "../../services/appState";
+import { supabase } from "../../supabaseClient";
 
 const router = useRouter();
-const { state, toggleLanguage, updateOrderStatus, signOut } = useAppState();
+const { state } = useAppState();
+
+const orders = ref([]);
+const activeFilter = ref("all");
+
+const navItems = computed(() => [
+  {
+    label: state.language === "en" ? "Live Orders" : "ออเดอร์สด",
+    to: "/staff/live-orders",
+  },
+  {
+    label: state.language === "en" ? "Menu Items" : "รายการเมนู",
+    to: "/staff/menu-items",
+  },
+  { label: state.language === "en" ? "Logout" : "ออกจากระบบ", to: "/logout" },
+]);
+
+async function fetchOrders() {
+  const { data, error } = await supabase
+    .from("orders")
+    .select("*, order_items (*)")
+    .order("created_at", { ascending: true }); // Sort by oldest order first
+
+  if (error) {
+    console.error("Supabase Error:", error);
+    return;
+  }
+
+  const allergyKeywords = [
+    "no onion",
+    "no peanuts",
+    "no shrimp",
+    "no dairy",
+    "no egg",
+    "allergic",
+    "แพ้",
+  ];
+
+  orders.value = data.map((order) => ({
+    id: order.id,
+    orderNumber: order.order_code || `A-${100 + order.id}`,
+    tableNumber: order.table_number?.replace("T-", "") || "?",
+    time: new Date(order.created_at).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    status: order.status === "pending" ? "new" : order.status,
+    items: (order.order_items || []).map((item, index) => {
+      const noteText = (item.note || "").toLowerCase();
+      const isAllergy = allergyKeywords.some((keyword) =>
+        noteText.includes(keyword),
+      );
+
+      return {
+        id: `${order.id}-${item.id}-${index}`, // Ensure unique id for each item
+        name: item.menu_name,
+        quantity: item.quantity,
+        note: item.note,
+        isAllergy: isAllergy,
+      };
+    }),
+    customerNote: order.customer_note,
+    allergies: order.allergies || [],
+    type: order.type || "dine_in",
+  }));
+}
+
+// Pass order id directly instead of parsing from string
+async function updateOrderStatus(orderId, nextStatus) {
+  console.log(`Updating Database - ID: ${orderId} | Status: ${nextStatus}`);
+
+  const { error } = await supabase
+    .from("orders")
+    .update({ status: nextStatus })
+    .eq("id", orderId);
+
+  if (error) {
+    console.error("Update Status Error:", error);
+    alert("Update failed: " + error.message);
+  } else {
+    console.log("Update successful!");
+    // Refresh data immediately after update
+    await fetchOrders();
+  }
+}
+
+let channel;
+onMounted(() => {
+  fetchOrders();
+
+  channel = supabase
+    .channel("public:orders") // Use standard Supabase channel name
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "orders" },
+      () => {
+        fetchOrders(); // Refresh data on update
+      },
+    )
+    .subscribe();
+});
+
+onUnmounted(() => {
+  if (channel) supabase.removeChannel(channel);
+});
 
 const columns = computed(() => [
   {
@@ -22,37 +126,19 @@ const columns = computed(() => [
     status: "preparing",
     title: state.language === "en" ? "Preparing" : "กำลังปรุง",
     action: state.language === "en" ? "Mark Ready" : "ปรุงเสร็จแล้ว",
-    next: "ready",
+    next: "ready", // Database status set to ready
   },
   {
     status: "ready",
     title: state.language === "en" ? "Ready for Pickup" : "พร้อมเสิร์ฟ",
     action: state.language === "en" ? "Mark Completed" : "เสิร์ฟเรียบร้อย",
-    next: "completed",
+    next: "served", // Map to served status
   },
   {
-    status: "completed",
+    status: "served", // Display served status column
     title: state.language === "en" ? "Completed" : "เสร็จสิ้น",
     action: "",
     next: "",
-  },
-]);
-
-const navItems = computed(() => [
-  {
-    label: state.language === "en" ? "Live Orders" : "ออเดอร์สด",
-    to: "/staff/live-orders",
-    short: "Orders",
-  },
-  {
-    label: state.language === "en" ? "Menu Items" : "รายการเมนู",
-    to: "/staff/menu-items",
-    short: "Menu",
-  },
-  {
-    label: state.language === "en" ? "Logout" : "ออกจากระบบ",
-    to: "/logout",
-    short: "Logout",
   },
 ]);
 
@@ -63,61 +149,56 @@ const filterButtons = computed(() => [
   { id: "ready_soon", en: "Ready Soon", th: "ใกล้เสร็จ" },
 ]);
 
-const liveCount = computed(
-  () =>
-    state.orders.filter(
-      (order) => !["completed", "cancelled"].includes(order.status),
-    ).length,
-);
-
-function logout() {
-  signOut();
-  router.push("/");
-}
+const filteredOrders = computed(() => {
+  let list = [...orders.value];
+  if (activeFilter.value === "dine_in")
+    return list.filter((o) => o.type === "dine_in");
+  if (activeFilter.value === "allergies")
+    return list.filter(
+      (o) =>
+        (o.allergies && o.allergies.length > 0) ||
+        o.items.some((item) => item.isAllergy),
+    );
+  if (activeFilter.value === "ready_soon")
+    return list.filter((o) => o.status === "preparing");
+  return list;
+});
 </script>
 
 <template>
   <div class="page-shell">
     <TopBar
-      :search-placeholder="
-        state.language === 'en'
-          ? 'Search orders, table, or item'
-          : 'ค้นหาออเดอร์, โต๊ะ หรือรายการอาหาร'
-      "
+      :search-placeholder="state.language === 'en' ? 'Search' : 'ค้นหาออเดอร์'"
     />
 
-    <div class="content-shell">
+    <div class="content-shell flex">
       <SideNav :items="navItems" />
 
-      <main class="main-panel">
-        <header class="mb-6 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 class="text-4xl font-black tracking-tight text-stone-900">
-              {{
-                state.language === "en"
-                  ? "Kitchen Order Tracker"
-                  : "ระบบติดตามออเดอร์ห้องครัว"
-              }}
-            </h1>
-            <p class="mt-2 text-muted">
-              {{
-                state.language === "en"
-                  ? "Monitor live incoming orders and update production tracking states."
-                  : "จัดการสถานะรายการอาหารที่กำลังสั่งเข้ามาในระบบห้องครัวแบบสดใหม่"
-              }}
-            </p>
-          </div>
+      <main class="main-panel flex-1 p-6">
+        <header class="mb-6">
+          <h1 class="text-4xl font-black text-stone-900">
+            Kitchen Order Tracker
+          </h1>
+          <h3 class="mt-1 text-md text-stone-500">
+            {{
+              state.language === "en"
+                ? "Monitor live incoming orders and update production tracking states."
+                : "ติดตามออเดอร์ที่เข้ามาแบบสด (Real-time) และอัปเดตสถานะการปรุงอาหารในแต่ละขั้นตอน"
+            }}
+          </h3>
         </header>
 
-        <div class="mb-6 flex flex-wrap items-center gap-2">
+        <div class="mb-6 flex flex-wrap gap-2">
           <button
-            v-for="(btn, idx) in filterButtons"
+            v-for="btn in filterButtons"
             :key="btn.id"
+            @click="activeFilter = btn.id"
             :class="
-              idx === 0
-                ? 'rounded-full bg-brand px-4 py-2 text-xs font-bold text-white shadow-sm'
-                : 'rounded-full bg-white px-4 py-2 text-xs font-medium text-stone-600 shadow-sm transition hover:bg-stone-50'
+              activeFilter === btn.id
+                ? 'bg-[#2e7d32] text-white'
+                : 'bg-white text-stone-600 hover:bg-stone-100'
             "
+            class="rounded-full px-6 py-2 text-sm font-semibold transition-all duration-200 shadow-sm"
           >
             {{ state.language === "en" ? btn.en : btn.th }}
           </button>
@@ -127,168 +208,139 @@ function logout() {
           <div
             v-for="column in columns"
             :key="column.status"
-            class="flex flex-col rounded-3xl bg-white p-4 shadow-soft border min-h-[600px] transition-all duration-200"
-            :class="[
-              column.status === 'new'
-                ? 'border-blue-100 ring-4 ring-blue-50/30'
-                : '',
-              column.status === 'preparing'
-                ? 'border-amber-100 ring-4 ring-amber-50/30'
-                : '',
-              column.status === 'ready'
-                ? 'border-brand/20 ring-4 ring-pale/40'
-                : '',
-              column.status === 'completed'
-                ? 'border-stone-200 bg-stone-50/40'
-                : '',
-            ]"
+            class="flex flex-col rounded-3xl bg-white p-4 shadow-soft border-2 min-h-[600px]"
+            :class="{
+              'border-blue-400': column.status === 'new',
+              'border-amber-400': column.status === 'preparing',
+              'border-emerald-500': column.status === 'ready',
+              'border-stone-200': column.status === 'completed',
+            }"
           >
             <div
-              class="mb-4 flex items-center justify-between pb-3 border-b"
-              :class="[
-                column.status === 'new' ? 'border-blue-100' : '',
-                column.status === 'preparing' ? 'border-amber-100' : '',
-                column.status === 'ready' ? 'border-stone-100' : '',
-                column.status === 'completed' ? 'border-stone-200' : '',
-              ]"
+              class="mb-4 flex items-center justify-between pb-3 border-b-2 transition-colors"
+              :class="{
+                'border-blue-400': column.status === 'new',
+                'border-amber-400': column.status === 'preparing',
+                'border-emerald-500': column.status === 'ready',
+                'border-stone-200': column.status === 'completed',
+              }"
             >
-              <div class="flex items-center gap-2">
-                <span
-                  class="h-2.5 w-2.5 rounded-full"
-                  :class="[
-                    column.status === 'new' ? 'bg-blue-500 animate-pulse' : '',
-                    column.status === 'preparing' ? 'bg-amber-500' : '',
-                    column.status === 'ready' ? 'bg-brand' : '',
-                    column.status === 'completed' ? 'bg-stone-400' : '',
-                  ]"
-                ></span>
-                <h2
-                  class="font-black text-stone-800 tracking-wide text-sm uppercase"
-                >
-                  {{ column.title }}
-                </h2>
-              </div>
-
-              <span
-                class="grid h-6 min-w-6 place-items-center rounded-full px-2 text-xs font-black shadow-xs"
-                :class="[
-                  column.status === 'new'
-                    ? 'bg-blue-50 text-blue-700 border border-blue-100'
-                    : '',
-                  column.status === 'preparing'
-                    ? 'bg-amber-50 text-amber-700 border border-amber-100'
-                    : '',
-                  column.status === 'ready'
-                    ? 'bg-pale text-brand border border-brand/10'
-                    : '',
-                  column.status === 'completed'
-                    ? 'bg-stone-200 text-stone-600'
-                    : '',
-                ]"
+              <h2
+                class="font-black text-sm uppercase"
+                :class="{
+                  'text-blue-600': column.status === 'new',
+                  'text-amber-600': column.status === 'preparing',
+                  'text-emerald-600': column.status === 'ready',
+                  'text-stone-600': column.status === 'completed',
+                }"
               >
-                {{
-                  state.orders.filter((order) => order.status === column.status)
+                {{ column.title }}
+              </h2>
+              <span
+                class="bg-stone-100 px-2 py-1 rounded-full text-xs font-bold"
+                >{{
+                  filteredOrders.filter((o) => o.status === column.status)
                     .length
-                }}
-              </span>
+                }}</span
+              >
             </div>
 
-            <div class="flex-1 space-y-4 overflow-y-auto max-h-[700px] pr-1">
+            <div class="flex-1 space-y-4 overflow-y-auto max-h-[700px]">
               <article
-                v-for="order in state.orders.filter(
-                  (order) => order.status === column.status,
+                v-for="order in filteredOrders.filter(
+                  (o) => o.status === column.status,
                 )"
                 :key="order.id"
-                class="section-card rounded-2xl bg-white p-5 border border-stone-100/80 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5"
-                :class="
-                  column.status === 'completed'
-                    ? 'opacity-70 grayscale-[30%]'
-                    : ''
-                "
+                class="section-card rounded-2xl bg-white p-5 border border-stone-100 transition hover:shadow-md"
               >
-                <div class="flex items-start justify-between gap-3">
+                <div class="flex justify-between items-start mb-4">
                   <div>
-                    <h3 class="font-black text-lg text-stone-900">
-                      #{{ order.orderNumber }}
-                    </h3>
-                    <p class="text-xs font-medium text-stone-500 mt-0.5">
-                      {{ state.language === "en" ? "Table" : "โต๊ะ" }}
-                      {{ order.tableNumber }} &middot; {{ order.time }}
-                    </p>
+                    <h3 class="font-black text-lg">#{{ order.orderNumber }}</h3>
+                    <div class="flex items-center gap-2 mt-0.5">
+                      <p class="text-xs text-stone-500 font-medium">
+                        Table {{ order.tableNumber }}
+                      </p>
+                      <span
+                        class="text-[10px] font-bold text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded uppercase"
+                      >
+                        {{ order.time }}
+                      </span>
+                    </div>
                   </div>
                   <StatusPill :status="order.status" />
                 </div>
 
-                <div
-                  class="mt-4 space-y-2.5 border-t border-stone-100 pt-3 text-sm text-stone-800"
-                >
+                <div class="mt-4 pt-3 text-sm">
                   <div
                     v-for="item in order.items"
-                    :key="item.name"
-                    class="leading-relaxed"
+                    :key="item.id"
+                    class="flex flex-col gap-1 mb-2"
                   >
-                    <p class="font-medium">
-                      <span class="text-brand font-bold mr-1.5"
-                        >{{ item.quantity }}&times;</span
+                    <div class="flex gap-2">
+                      <span class="text-brand font-bold"
+                        >{{ item.quantity }}×</span
                       >
-                      {{ item.name }}
-                    </p>
-                    <span
-                      v-if="item.note"
-                      class="mt-0.5 block text-xs font-medium text-amber-700 bg-amber-50 rounded px-2 py-0.5 w-fit"
+                      <span
+                        :class="[
+                          'font-medium transition-colors',
+                          item.isAllergy
+                            ? 'text-red-600 font-black'
+                            : 'text-stone-800',
+                        ]"
+                      >
+                        {{ item.name }}
+                      </span>
+                    </div>
+
+                    <div
+                      v-if="item.note && item.note.trim() !== ''"
+                      :class="[
+                        'ml-6 text-[11px] italic px-2 py-1 rounded border-l-2 mt-1 transition-colors',
+                        item.isAllergy
+                          ? 'bg-red-50 border-red-500 text-red-700 font-bold'
+                          : 'bg-stone-50 border-stone-200 text-stone-500',
+                      ]"
                     >
-                      {{
-                        state.language === "en" ? "Mod" : "หมายเหตุเพิ่มเติม"
-                      }}: {{ item.note }}
-                    </span>
+                      <span class="mr-1 uppercase">
+                        {{
+                          item.isAllergy
+                            ? state.language === "en"
+                              ? "Allergy Alert:"
+                              : "แจ้งเตือนแพ้อาหาร:"
+                            : state.language === "en"
+                              ? "Note:"
+                              : "หมายเหตุ:"
+                        }}
+                      </span>
+                      {{ item.note }}
+                    </div>
                   </div>
                 </div>
 
                 <div
-                  v-if="order.allergies.length"
-                  class="mt-4 rounded-xl bg-red-50 border border-red-100 p-3 text-xs font-bold text-red-800 shadow-xs"
+                  v-if="order.customerNote && order.customerNote.trim() !== ''"
+                  class="mt-3 p-3 bg-amber-50 border border-amber-100 rounded-xl text-xs italic text-amber-900"
                 >
-                  {{
-                    state.language === "en"
-                      ? "ALLERGY ALERT"
-                      : "แจ้งเตือนข้อมูลคนแพ้อาหาร"
-                  }}: {{ order.allergies.join(", ") }}
+                  <span class="font-bold uppercase tracking-wider block mb-1">
+                    {{ state.language === "en" ? "Note:" : "หมายเหตุ:" }}
+                  </span>
+                  &ldquo;{{ order.customerNote }}&rdquo;
                 </div>
 
-                <blockquote
-                  v-if="order.customerNote"
-                  class="mt-3 rounded-xl bg-stone-50 border border-stone-200/50 px-3 py-2 text-xs italic text-stone-600"
-                >
-                  &ldquo;{{ order.customerNote }}&rdquo;
-                </blockquote>
-
-                <div class="mt-5 border-t border-stone-100 pt-3">
+                <div class="mt-5 pt-3">
                   <button
                     v-if="column.action"
-                    class="w-full rounded-xl py-2.5 text-xs font-bold tracking-wider uppercase transition active:scale-95 shadow-sm border"
-                    :class="[
-                      column.status === 'new'
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white border-transparent'
-                        : '',
-                      column.status === 'preparing'
-                        ? 'bg-amber-500 hover:bg-amber-600 text-white border-transparent'
-                        : '',
-                      column.status === 'ready'
-                        ? 'bg-brand hover:bg-brandDark text-white border-transparent'
-                        : '',
-                    ]"
-                    @click="updateOrderStatus(order.orderNumber, column.next)"
+                    @click="updateOrderStatus(order.id, column.next)"
+                    class="w-full rounded-xl py-2.5 text-xs font-bold bg-[#2e7d32] text-white hover:bg-[#428a46]"
                   >
                     {{ column.action }}
                   </button>
                   <div
                     v-else
-                    class="rounded-xl bg-stone-100 border border-stone-200 py-2 text-center text-xs font-bold text-stone-500 tracking-wide uppercase"
+                    class="rounded-xl bg-stone-100 py-2 text-center text-xs font-bold text-stone-500 uppercase"
                   >
                     {{
-                      state.language === "en"
-                        ? "Archived Out"
-                        : "จัดเก็บเรียบร้อย"
+                      state.language === "en" ? "Completed" : "จัดเก็บเรียบร้อย"
                     }}
                   </div>
                 </div>
@@ -298,7 +350,5 @@ function logout() {
         </section>
       </main>
     </div>
-
-    <MobileNav :items="navItems" />
   </div>
 </template>
