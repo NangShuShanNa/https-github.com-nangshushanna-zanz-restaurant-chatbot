@@ -40,23 +40,29 @@ const navItems = [
   },
 ];
 
-// Fetch menu items from Supabase based on the restaurant session
+/// Fetch menu items from Supabase based on URL parameter or restaurant session
 async function fetchDatabaseMenuItems() {
   isLoading.value = true;
   try {
-    const savedUserJson = localStorage.getItem("zank-active-user");
-    if (!savedUserJson) throw new Error("No active session found.");
-    const localUser = JSON.parse(savedUserJson);
+    // 🛑 บังคับระบุ ID ร้านตรงๆ ไปเลย เพื่อข้ามปัญหาหา Session/URL ไม่เจอ
+    const finalRestaurantId = "f3b38122-3874-4834-8902-87a1794c7fa1";
+
+    console.log("1. กำลังค้นหาข้อมูลด้วย ID:", finalRestaurantId);
 
     const { data, error } = await supabase
       .from("menu_items")
       .select("*")
-      .eq("restaurant_id", localUser.restaurant_id)
+      .eq("restaurant_id", finalRestaurantId)
       .order("id", { ascending: true });
 
-    if (error) throw error;
+    if (error) {
+      console.error("2. Supabase Error:", error);
+      throw error;
+    }
 
-    // Map database fields to the application state
+    console.log("3. ข้อมูลที่ดึงได้จาก Supabase:", data); // ดูตรงนี้ใน Console!
+
+    // Map ข้อมูลใส่ state ตามปกติ
     state.menuItems = (data || []).map((item) => ({
       id: item.id,
       name: item.name,
@@ -77,13 +83,14 @@ async function fetchDatabaseMenuItems() {
       spiceLevel: item.spice_level,
       availability: item.availability,
     }));
+
+    console.log("4. ข้อมูลหลัง Map เสร็จเรียบร้อย:", state.menuItems);
   } catch (error) {
-    console.error("Error fetching database menu items:", error.message);
+    console.error("เกิดข้อผิดพลาด:", error.message);
   } finally {
     isLoading.value = false;
   }
 }
-
 // Lifecycle hook to load data on mount
 onMounted(() => {
   fetchDatabaseMenuItems();
@@ -403,7 +410,7 @@ const cartItems = computed(() => state.cart);
           <div class="mt-6 flex flex-wrap gap-3">
             <button
               class="primary-btn"
-              style="padding: 6px 16px !important; font-size: 15px !important;"
+              style="padding: 6px 16px !important; font-size: 15px !important"
               :disabled="selectedItem.availability === 'sold_out'"
               @click="addSelected"
             >
@@ -411,7 +418,7 @@ const cartItems = computed(() => state.cart);
             </button>
             <button
               class="secondary-btn"
-              style="padding: 6px 16px !important; font-size: 15px !important;"
+              style="padding: 6px 16px !important; font-size: 15px !important"
             >
               {{ t("Ask Chef AI about this dish") }}
             </button>
