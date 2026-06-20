@@ -7,20 +7,24 @@ import MobileNav from "../../components/MobileNav.vue";
 import QuantityControl from "../../components/QuantityControl.vue";
 import SideNav from "../../components/SideNav.vue";
 import TagList from "../../components/TagList.vue";
-import TopBar from "../../components/TopBarCustomer.vue"; // เปลี่ยนมาเรียก TopBarCustomer ของฝั่งลูกค้าตามที่คุณแยกไฟล์ไว้
+import TopBar from "../../components/TopBarCustomer.vue";
 import { categories } from "../../data/mockData";
 import { useAppState } from "../../services/appState";
 
 import { supabase } from "../../supabaseClient";
 
+// Import global state and helper functions
 const { state, addToCart, localizeMenuItem, t } = useAppState();
 const route = useRoute();
+
+// Local UI state variables
 const selectedItem = ref(null);
 const search = ref("");
 const detailQty = ref(1);
 const detailNote = ref("");
 const isLoading = ref(false);
 
+// Navigation menu configuration
 const navItems = [
   { label: "Starters", to: "/customer/menu?category=Starters" },
   {
@@ -36,6 +40,7 @@ const navItems = [
   },
 ];
 
+// Fetch menu items from Supabase based on the restaurant session
 async function fetchDatabaseMenuItems() {
   isLoading.value = true;
   try {
@@ -51,6 +56,7 @@ async function fetchDatabaseMenuItems() {
 
     if (error) throw error;
 
+    // Map database fields to the application state
     state.menuItems = (data || []).map((item) => ({
       id: item.id,
       name: item.name,
@@ -78,10 +84,12 @@ async function fetchDatabaseMenuItems() {
   }
 }
 
+// Lifecycle hook to load data on mount
 onMounted(() => {
   fetchDatabaseMenuItems();
 });
 
+// Computed property to filter menu items based on category and search query
 const filteredItems = computed(() =>
   (state.menuItems || []).map(localizeMenuItem).filter((item) => {
     const isAllMenuMode =
@@ -95,6 +103,7 @@ const filteredItems = computed(() =>
 
     const categoryMatch = isAllMenuMode || isDirectMatch || isDrinkMatch;
 
+    // Search logic across multiple fields (name, description, ingredients, tags)
     const text = [
       item.name,
       item.nameTh,
@@ -114,6 +123,7 @@ const filteredItems = computed(() =>
   }),
 );
 
+// Watch for route category changes to update current selection
 watch(
   () => route.query.category,
   (category) => {
@@ -135,30 +145,35 @@ watch(
   { immediate: true },
 );
 
+// Switch to 'All' category if user starts typing in search
 watch(search, (newSearch) => {
   if (newSearch.trim() !== "") {
     state.selectedCategory = "All";
   }
 });
 
+// Open detailed view for a specific item
 function openDetail(item) {
   selectedItem.value = item;
   detailQty.value = 1;
   detailNote.value = "";
 }
 
+// Add the selected item with note/quantity to the global cart
 function addSelected() {
   addToCart(selectedItem.value.id, detailQty.value, detailNote.value);
   selectedItem.value = null;
 }
 
+// Helper to get current quantity of an item in the cart
 const getCartItemQuantity = computed(() => {
   return (itemId) => {
-    const item = cartItems.value.find((c) => c.menuItemId === itemId); // สังเกตว่าใช้ menuItemId
+    const item = cartItems.value.find((c) => c.menuItemId === itemId);
     return item ? item.quantity : 0;
   };
 });
 
+// Calculate total number of items in cart for display
 const totalCartQuantity = computed(() => {
   return cartItems.value.reduce((total, item) => total + item.quantity, 0);
 });
@@ -275,13 +290,11 @@ const cartItems = computed(() => state.cart);
                     >
                       -
                     </button>
-
                     <span
                       class="font-black w-8 text-center text-lg text-gray-800"
                     >
                       {{ getCartItemQuantity(item.id) }}
                     </span>
-
                     <button
                       class="primary-btn w-7 h-7 flex items-center justify-center rounded-full"
                       @click="addToCart(item.id, 1)"
@@ -295,7 +308,6 @@ const cartItems = computed(() => state.cart);
                       padding: 6px 16px !important;
                       font-size: 15px !important;
                       height: auto !important;
-                      min-height: unset !important;
                     "
                     @click="openDetail(item)"
                   >
@@ -379,12 +391,6 @@ const cartItems = computed(() => state.cart);
                 }}
               </p>
             </div>
-            <div>
-              <strong>{{ t("Availability") }}</strong>
-              <p class="capitalize text-muted">
-                {{ t(selectedItem.availability) }}
-              </p>
-            </div>
           </div>
           <div class="mt-6 flex flex-wrap items-center gap-4">
             <QuantityControl v-model="detailQty" />
@@ -397,12 +403,7 @@ const cartItems = computed(() => state.cart);
           <div class="mt-6 flex flex-wrap gap-3">
             <button
               class="primary-btn"
-              style="
-                padding: 6px 16px !important;
-                font-size: 15px !important;
-                height: auto !important;
-                min-height: unset !important;
-              "
+              style="padding: 6px 16px !important; font-size: 15px !important;"
               :disabled="selectedItem.availability === 'sold_out'"
               @click="addSelected"
             >
@@ -410,12 +411,7 @@ const cartItems = computed(() => state.cart);
             </button>
             <button
               class="secondary-btn"
-              style="
-                padding: 6px 16px !important;
-                font-size: 15px !important;
-                height: auto !important;
-                min-height: unset !important;
-              "
+              style="padding: 6px 16px !important; font-size: 15px !important;"
             >
               {{ t("Ask Chef AI about this dish") }}
             </button>
