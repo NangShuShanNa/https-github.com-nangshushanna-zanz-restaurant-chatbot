@@ -40,7 +40,7 @@ const accountLabel = computed(() => {
   if (role === "admin" || role === "owner") {
     return state.language === "en" ? "Owner / Admin" : "เจ้าของร้าน / แอดมิน";
   }
-  if (role === "staff") {
+  if (role === "kitchen_staff" || role === "reception_staff") {
     return state.language === "en" ? "Staff" : "พนักงาน";
   }
   return state.language === "en" ? "Customer" : "ลูกค้าทั่วไป";
@@ -54,8 +54,8 @@ async function fetchUserData() {
       state.language = savedLanguage;
     }
 
-    // Retrieve global authentication session payload mappings
-    const savedUserJson = localStorage.getItem("zank-active-user");
+    // Switched to using sessionStorage to ensure multiple login tabs remain independent and do not conflict.
+    const savedUserJson = sessionStorage.getItem("zank-active-user");
 
     if (savedUserJson) {
       const localUser = JSON.parse(savedUserJson);
@@ -68,14 +68,15 @@ async function fetchUserData() {
       dbRole.value = "customer";
     }
   } catch (error) {
-    console.error("Error fetching user data from localStorage:", error);
+    console.error("Error fetching user data from sessionStorage:", error);
     userEmail.value = state.language === "en" ? "Guest" : "ลูกค้าทั่วไป";
     dbRole.value = "customer";
   }
 }
 
 async function handleLogout() {
-  localStorage.removeItem("zank-active-user");
+  // Clear user data from sessionStorage upon logging out.
+  sessionStorage.removeItem("zank-active-user");
   state.activeUser = null;
   await supabase.auth.signOut();
   router.push("/");
@@ -128,17 +129,6 @@ onMounted(() => {
           >
         </span>
       </button>
-
-      <!-- <RouterLink
-        v-if="dbRole?.toLowerCase() !== 'admin' && dbRole?.toLowerCase() !== 'owner' && dbRole?.toLowerCase() !== 'staff'"
-        to="/customer/cart"
-        class="relative z-30 inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-stone-900 transition hover:bg-pale focus:outline-none focus:ring-2 focus:ring-brand/40"
-        :aria-label="state.language === 'en' ? 'Open cart' : 'เปิดตะกร้า'"
-        :title="state.language === 'en' ? 'Open cart' : 'เปิดตะกร้า'"
-      >
-        <ShoppingCart :size="25" />
-        <span v-if="cartCount" class="absolute -right-2 -top-2 grid h-5 w-5 place-items-center rounded-full bg-brand text-xs font-bold text-white">{{ cartCount }}</span>
-      </RouterLink> -->
 
       <div
         class="relative flex items-center gap-2 rounded-full border border-stone-100 p-3 pr-4 bg-stone-50"

@@ -51,8 +51,8 @@ const emailPlaceholder = computed(() => {
       : "เช่น admin@zank.com";
   }
   return state.language === "en"
-    ? "e.g., kitchen@zank.com"
-    : "เช่น kitchen@zank.com";
+    ? "e.g., staff@zank.com"
+    : "เช่น staff@zank.com";
 });
 
 const passwordPlaceholder = computed(() => {
@@ -180,7 +180,8 @@ async function submit() {
     };
 
     state.activeUser = userData;
-    localStorage.setItem("zank-active-user", JSON.stringify(userData));
+    // Store user data in sessionStorage instead of localStorage to isolate sessions per tab
+    sessionStorage.setItem("zank-active-user", JSON.stringify(userData));
     router.push(target.value);
   } catch (error) {
     console.error("Login verification exception error:", error);
@@ -196,7 +197,8 @@ onMounted(() => {
 
   if (state.activeUser) {
     state.activeUser = null;
-    localStorage.removeItem("zank-active-user");
+    // Clear the session state from sessionStorage as well when unmounting or returning to this view
+    sessionStorage.removeItem("zank-active-user");
   }
 });
 </script>

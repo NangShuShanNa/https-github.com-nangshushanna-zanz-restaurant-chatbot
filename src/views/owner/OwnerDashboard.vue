@@ -36,7 +36,7 @@ const soldOutItemsList = computed(() =>
   menuItemsList.value.filter((item) => item.availability === "sold_out"),
 );
 
-// ฟังก์ชันกำหนดสีสถานะ
+// Function to determine status color styling
 const getStatusStyle = (status) => {
   switch (status) {
     case "pending":
@@ -66,21 +66,22 @@ async function initializeDashboard() {
     const localUser = JSON.parse(savedUserJson);
     restaurantId.value = localUser.restaurant_id;
 
-    // 1. ดึงข้อมูลเมนู
+    // 1. Fetch menu data
     const { data: menuData } = await supabase
       .from("menu_items")
       .select("*")
+      .is("is_deleted", false)
       .eq("restaurant_id", restaurantId.value);
     if (menuData) menuItemsList.value = menuData;
 
-    // 2. ดึงจำนวน Live Orders (จากตาราง orders)
+    // 2. Fetch the count of Live Orders (from the orders table)
     const { count } = await supabase
       .from("orders")
       .select("id", { count: "exact", head: true })
       .in("status", ["pending", "preparing", "ready", "served"]);
     dbLiveOrdersCount.value = count || 0;
 
-    // 3. ดึงรายการ Recent Orders (จากตาราง orders)
+    // 3. Fetch the list of Recent Orders (from the orders table)
     const { data: orderData } = await supabase
       .from("orders")
       .select("order_code, table_number, status, created_at")

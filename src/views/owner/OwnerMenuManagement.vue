@@ -44,6 +44,7 @@ async function fetchMenuItems() {
     const { data, error } = await supabase
       .from("menu_items")
       .select("*")
+      .is("is_deleted", false)
       .eq("restaurant_id", localUser.restaurant_id) // Query items paired with the correct store
       .order("id", { ascending: true });
 
@@ -318,17 +319,20 @@ async function submitAdd() {
   }
 }
 
-// 6. Delete item from Supabase
+// 6. Soft Delete item from Supabase
 async function removeItem(item) {
   if (!confirm(`Are you sure you want to delete ${item.name}?`)) return;
 
   try {
+    // Switch from using .delete() to updating the is_deleted flag to true
     const { error } = await supabase
       .from("menu_items")
-      .delete()
+      .update({ is_deleted: true })
       .eq("id", item.id);
+      
     if (error) throw error;
 
+    // Update the UI by removing the item from the array
     menuItems.value = menuItems.value.filter((i) => i.id !== item.id);
     if (menuItems.value.length > 0) {
       load(menuItems.value[0]);

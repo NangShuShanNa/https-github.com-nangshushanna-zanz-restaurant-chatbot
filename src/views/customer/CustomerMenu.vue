@@ -40,11 +40,10 @@ const navItems = [
   },
 ];
 
-/// Fetch menu items from Supabase based on URL parameter or restaurant session
+// Fetch menu items from Supabase based on URL parameter or restaurant session
 async function fetchDatabaseMenuItems() {
   isLoading.value = true;
   try {
-    // 🛑 บังคับระบุ ID ร้านตรงๆ ไปเลย เพื่อข้ามปัญหาหา Session/URL ไม่เจอ
     const finalRestaurantId = "f3b38122-3874-4834-8902-87a1794c7fa1";
 
     console.log("1. กำลังค้นหาข้อมูลด้วย ID:", finalRestaurantId);
@@ -52,6 +51,7 @@ async function fetchDatabaseMenuItems() {
     const { data, error } = await supabase
       .from("menu_items")
       .select("*")
+      .is("is_deleted", false)
       .eq("restaurant_id", finalRestaurantId)
       .order("id", { ascending: true });
 
@@ -60,9 +60,9 @@ async function fetchDatabaseMenuItems() {
       throw error;
     }
 
-    console.log("3. ข้อมูลที่ดึงได้จาก Supabase:", data); // ดูตรงนี้ใน Console!
+    console.log("3. ข้อมูลที่ดึงได้จาก Supabase:", data); // Review this output in the console
 
-    // Map ข้อมูลใส่ state ตามปกติ
+    // Map the fetched data to the global state
     state.menuItems = (data || []).map((item) => ({
       id: item.id,
       name: item.name,
@@ -99,6 +99,11 @@ onMounted(() => {
 // Computed property to filter menu items based on category and search query
 const filteredItems = computed(() =>
   (state.menuItems || []).map(localizeMenuItem).filter((item) => {
+
+    if (item.availability === "sold_out") {
+      return false;
+    }
+
     const isAllMenuMode =
       !route.query.category ||
       state.selectedCategory === "All" ||

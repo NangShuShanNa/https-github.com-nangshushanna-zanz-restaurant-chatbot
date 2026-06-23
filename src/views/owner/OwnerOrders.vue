@@ -56,7 +56,7 @@ function formatOrder(dbOrder) {
   const dbItems = dbOrder.order_items || [];
 
   const formattedItems = dbItems.map((item) => {
-    // แก้ไขจุดนี้: ดึงค่าจากคอลัมน์ price_at_order ตามโครงสร้างตารางจริงของคุณ
+    // Fetch the value from the price_at_order column according to your actual table structure
     let itemPrice = parseFloat(item.price_at_order || item.price || 0);
 
     return {
@@ -67,7 +67,7 @@ function formatOrder(dbOrder) {
     };
   });
 
-  // กรองเมนูที่มี note ขึ้นต้นด้วย No (เช่น "No onion") เป็น Allergy Alert
+  // Filter menus with a note starting with "No" (e.g., "No onion") as an Allergy Alert
   const allergyList = formattedItems
     .filter((item) => item.note && /^no/i.test(item.note.trim()))
     .map((item) => item.note.trim());
@@ -80,7 +80,7 @@ function formatOrder(dbOrder) {
     allergies: allergyList,
     items: formattedItems,
     customerNote: dbOrder.customer_note || "",
-    totalPrice: parseFloat(dbOrder.total_price || 0), // ดึงราคารวมจากตาราง orders
+    totalPrice: parseFloat(dbOrder.total_price || 0), // Fetch the total price from the orders table
     time: new Date(dbOrder.created_at).toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
