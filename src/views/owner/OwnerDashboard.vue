@@ -54,14 +54,14 @@ const getStatusStyle = (status) => {
 
 function confirmExit() {
   signOut();
-  localStorage.removeItem("zank-active-user");
+  sessionStorage.removeItem("zank-active-user");
   showExitModal.value = false;
   router.push("/owner/login");
 }
 
 async function initializeDashboard() {
   try {
-    const savedUserJson = localStorage.getItem("zank-active-user");
+    const savedUserJson = sessionStorage.getItem("zank-active-user"); 
     if (!savedUserJson) return;
     const localUser = JSON.parse(savedUserJson);
     restaurantId.value = localUser.restaurant_id;

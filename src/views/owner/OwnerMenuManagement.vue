@@ -37,7 +37,7 @@ async function fetchMenuItems() {
   isLoading.value = true;
   try {
     // Check global authentication fallback credentials
-    const savedUserJson = localStorage.getItem("zank-active-user");
+    const savedUserJson = sessionStorage.getItem("zank-active-user");
     if (!savedUserJson) throw new Error("No active session found.");
     const localUser = JSON.parse(savedUserJson);
 
