@@ -13,6 +13,7 @@ import {
   History,
   LayoutDashboard,
   LayoutGrid,
+  QrCode,
 } from "@lucide/vue";
 
 import { ref, computed } from "vue";
@@ -48,6 +49,7 @@ const iconMap = {
   "Menu Items": MenuSquare,
   Dashboard: LayoutDashboard,
   "Menu Management": MenuSquare,
+  "Table Management": QrCode,
   Orders: ClipboardList,
   "Staff Accounts": Users,
   Logout: LogOut,
@@ -56,6 +58,7 @@ const iconMap = {
   Home,
   ออเดอร์สด: Monitor,
   รายการเมนู: MenuSquare,
+  จัดการโต๊ะ: QrCode,
   ออกจากระบบ: LogOut,
 };
 
@@ -89,7 +92,6 @@ function isCustomerItemActive(item) {
   }
   return route.path === item.to;
 }
-
 </script>
 
 <template>
@@ -141,15 +143,40 @@ function isCustomerItemActive(item) {
                 ? state.language === "en"
                   ? "Menu Management"
                   : "จัดการเมนูอาหาร"
-                : item.label === "Orders"
+                : item.label === "Table Management"
                   ? state.language === "en"
-                    ? "Orders"
-                    : "คำสั่งซื้อ"
-                  : item.label === "Staff Accounts"
+                    ? "Table Management"
+                    : "จัดการโต๊ะและ QR Code"
+                  : item.label === "Orders"
                     ? state.language === "en"
-                      ? "Staff Accounts"
-                      : "บัญชีพนักงาน"
-                    : t(item.label)
+                      ? "Orders"
+                      : "คำสั่งซื้อ"
+                    : item.label === "Staff Accounts"
+                      ? state.language === "en"
+                        ? "Staff Accounts"
+                        : "บัญชีพนักงาน"
+                      : t(item.label)
+          }}
+        </RouterLink>
+
+        <!-- Condition check: When the loop encounters the 'Staff Accounts' menu and is on the owner URL, display the 'Table Management' menu immediately after -->
+        <RouterLink
+          v-if="
+            item.label === 'Staff Accounts' && route.path.startsWith('/owner/')
+          "
+          to="/owner/tables"
+          class="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-semibold transition-all duration-200 hover:bg-softGreen/50"
+          :class="
+            route.path === '/owner/tables'
+              ? 'bg-softGreen text-stone-950 font-black shadow-xs ring-1 ring-brand/10'
+              : 'text-stone-600 bg-transparent'
+          "
+        >
+          <component :is="iconMap['Table Management']" :size="20" />
+          {{
+            state.language === "en"
+              ? "Table Management"
+              : "จัดการโต๊ะและ QR Code"
           }}
         </RouterLink>
 

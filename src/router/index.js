@@ -13,6 +13,7 @@ import OwnerDashboard from "../views/owner/OwnerDashboard.vue";
 import OwnerMenuManagement from "../views/owner/OwnerMenuManagement.vue";
 import OwnerOrders from "../views/owner/OwnerOrders.vue";
 import OwnerStaffAccounts from "../views/owner/OwnerStaffAccounts.vue";
+import OwnerTableManagement from "../views/owner/OwnerTableManagement.vue";
 import { useAppState } from "../services/appState";
 
 const routes = [
@@ -58,6 +59,11 @@ const routes = [
     component: OwnerStaffAccounts,
     meta: { requiresOwner: true },
   },
+  {
+    path: "/owner/tables",
+    component: OwnerTableManagement,
+    meta: { requiresOwner: true },
+  },
 ];
 
 const router = createRouter({
@@ -68,6 +74,15 @@ const router = createRouter({
 
 router.beforeEach((to) => {
   const { state } = useAppState();
+
+  // --- Check and restore User data on page refresh ---
+  if (!state.activeUser) {
+    const savedUserJson = sessionStorage.getItem("zank-active-user");
+    if (savedUserJson) {
+      state.activeUser = JSON.parse(savedUserJson);
+    }
+  }
+  // ------------------------------------------------
 
   const publicPages = [
     "/",
