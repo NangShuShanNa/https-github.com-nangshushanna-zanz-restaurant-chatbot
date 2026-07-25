@@ -1,94 +1,354 @@
 <script setup>
-import { computed } from 'vue'
-import { useRouter } from 'vue-router'
-import MobileNav from '../../components/MobileNav.vue'
-import SideNav from '../../components/SideNav.vue'
-import StatusPill from '../../components/StatusPill.vue'
-import TopBar from '../../components/TopBar.vue'
-import { useAppState } from '../../services/appState'
+import { computed, ref, onMounted, onUnmounted } from "vue";
+import { useRouter } from "vue-router";
+import MobileNav from "../../components/MobileNav.vue";
+import SideNav from "../../components/SideNav.vue";
+import StatusPill from "../../components/StatusPill.vue";
+import TopBar from "../../components/TopBar.vue";
+import { useAppState } from "../../services/appState";
+import { supabase } from "../../supabaseClient";
 
-const router = useRouter()
-const { state, updateOrderStatus, signOut } = useAppState()
-const columns = [
-  { status: 'new', title: 'New', action: 'Start Preparing', next: 'preparing' },
-  { status: 'preparing', title: 'Preparing', action: 'Mark Ready', next: 'ready' },
-  { status: 'ready', title: 'Ready', action: 'Mark Completed', next: 'completed' },
-  { status: 'completed', title: 'Completed', action: '', next: '' },
-]
-const navItems = [
-  { label: 'Live Orders', to: '/staff/live-orders', short: 'Orders' },
-  { label: 'Menu Items', to: '/staff/menu-items', short: 'Menu' },
-  { label: 'Logout', to: '/logout', short: 'Logout' },
-]
+const router = useRouter();
+const { state } = useAppState();
 
-const liveCount = computed(() => state.orders.filter((order) => !['completed', 'cancelled'].includes(order.status)).length)
+const orders = ref([]);
+const activeFilter = ref("all");
 
-function logout() {
-  signOut()
-  router.push('/')
+const navItems = computed(() => [
+  {
+    label: state.language === "en" ? "Live Orders" : "ออเดอร์สด",
+    to: "/staff/live-orders",
+  },
+  {
+    label: state.language === "en" ? "Menu Items" : "รายการเมนู",
+    to: "/staff/menu-items",
+  },
+  { label: state.language === "en" ? "Logout" : "ออกจากระบบ", to: "/logout" },
+]);
+
+async function fetchOrders() {
+  const { data, error } = await supabase
+    .from("orders")
+    .select("*, order_items (*)")
+    .order("created_at", { ascending: true }); // Sort by oldest order first
+
+  if (error) {
+    console.error("Supabase Error:", error);
+    return;
+  }
+
+  const allergyKeywords = [
+    "no onion",
+    "no peanuts",
+    "no shrimp",
+    "no dairy",
+    "no egg",
+    "allergic",
+    "แพ้",
+  ];
+
+  orders.value = data.map((order) => ({
+    id: order.id,
+    orderNumber: order.order_code || `A-${100 + order.id}`,
+    tableNumber: order.table_number?.replace("T-", "") || "?",
+    time: new Date(order.created_at).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    status: order.status === "pending" ? "new" : order.status,
+    items: (order.order_items || []).map((item, index) => {
+      const noteText = (item.note || "").toLowerCase();
+      const isAllergy = allergyKeywords.some((keyword) =>
+        noteText.includes(keyword),
+      );
+
+      return {
+        id: `${order.id}-${item.id}-${index}`, // Ensure unique id for each item
+        name: item.menu_name,
+        quantity: item.quantity,
+        note: item.note,
+        isAllergy: isAllergy,
+      };
+    }),
+    customerNote: order.customer_note,
+    allergies: order.allergies || [],
+    type: order.type || "dine_in",
+  }));
 }
+
+// Pass order id directly instead of parsing from string
+async function updateOrderStatus(orderId, nextStatus) {
+  console.log(`Updating Database - ID: ${orderId} | Status: ${nextStatus}`);
+
+  const { error } = await supabase
+    .from("orders")
+    .update({ status: nextStatus })
+    .eq("id", orderId);
+
+  if (error) {
+    console.error("Update Status Error:", error);
+    alert("Update failed: " + error.message);
+  } else {
+    console.log("Update successful!");
+    // Refresh data immediately after update
+    await fetchOrders();
+  }
+}
+
+let channel;
+onMounted(() => {
+  fetchOrders();
+
+  channel = supabase
+    .channel("public:orders") // Use standard Supabase channel name
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "orders" },
+      () => {
+        fetchOrders(); // Refresh data on update
+      },
+    )
+    .subscribe();
+});
+
+onUnmounted(() => {
+  if (channel) supabase.removeChannel(channel);
+});
+
+const columns = computed(() => [
+  {
+    status: "new",
+    title: state.language === "en" ? "New Tasks" : "ออเดอร์ใหม่",
+    action: state.language === "en" ? "Start Preparing" : "เริ่มเตรียมอาหาร",
+    next: "preparing",
+  },
+  {
+    status: "preparing",
+    title: state.language === "en" ? "Preparing" : "กำลังปรุง",
+    action: state.language === "en" ? "Mark Ready" : "ปรุงเสร็จแล้ว",
+    next: "ready", // Database status set to ready
+  },
+  {
+    status: "ready",
+    title: state.language === "en" ? "Ready for Pickup" : "พร้อมเสิร์ฟ",
+    action: state.language === "en" ? "Mark Completed" : "เสิร์ฟเรียบร้อย",
+    next: "served", // Map to served status
+  },
+  {
+    status: "served", // Display served status column
+    title: state.language === "en" ? "Completed" : "เสร็จสิ้น",
+    action: "",
+    next: "",
+  },
+]);
+
+const filterButtons = computed(() => [
+  { id: "all", en: "All Matches", th: "ทั้งหมด" },
+  { id: "dine_in", en: "Dine-In Only", th: "ทานที่ร้าน" },
+  { id: "allergies", en: "Allergy Alerts", th: "แจ้งเตือนการแพ้" },
+  { id: "ready_soon", en: "Ready Soon", th: "ใกล้เสร็จ" },
+]);
+
+const filteredOrders = computed(() => {
+  let list = [...orders.value];
+  if (activeFilter.value === "dine_in")
+    return list.filter((o) => o.type === "dine_in");
+  if (activeFilter.value === "allergies")
+    return list.filter(
+      (o) =>
+        (o.allergies && o.allergies.length > 0) ||
+        o.items.some((item) => item.isAllergy),
+    );
+  if (activeFilter.value === "ready_soon")
+    return list.filter((o) => o.status === "preparing");
+  return list;
+});
 </script>
 
 <template>
   <div class="page-shell">
-    <TopBar search-placeholder="Search orders, table, or item" />
-    <div class="content-shell">
+    <TopBar
+      :search-placeholder="state.language === 'en' ? 'Search' : 'ค้นหาออเดอร์'"
+    />
+
+    <div class="content-shell flex">
       <SideNav :items="navItems" />
-      <main class="main-panel">
-        <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 class="text-4xl font-black">Kitchen Order Tracker</h1>
-            <p class="mt-2 text-muted">Monitor orders and update customer status.</p>
-          </div>
-          <div class="flex gap-2">
-            <span class="rounded-full bg-brand px-4 py-2 text-sm font-bold text-white">Live Orders: {{ liveCount }}</span>
-            <button class="secondary-btn py-2" @click="logout">Logout</button>
-          </div>
+
+      <main class="main-panel flex-1 p-6">
+        <header class="mb-6">
+          <h1 class="text-4xl font-black text-stone-900">
+            Kitchen Order Tracker
+          </h1>
+          <h3 class="mt-1 text-md text-stone-500">
+            {{
+              state.language === "en"
+                ? "Monitor live incoming orders and update production tracking states."
+                : "ติดตามออเดอร์ที่เข้ามาแบบสด (Real-time) และอัปเดตสถานะการปรุงอาหารในแต่ละขั้นตอน"
+            }}
+          </h3>
+        </header>
+
+        <div class="mb-6 flex flex-wrap gap-2">
+          <button
+            v-for="btn in filterButtons"
+            :key="btn.id"
+            @click="activeFilter = btn.id"
+            :class="
+              activeFilter === btn.id
+                ? 'bg-[#2e7d32] text-white'
+                : 'bg-white text-stone-600 hover:bg-stone-100'
+            "
+            class="rounded-full px-6 py-2 text-sm font-semibold transition-all duration-200 shadow-sm"
+          >
+            {{ state.language === "en" ? btn.en : btn.th }}
+          </button>
         </div>
 
-        <div class="mb-5 flex flex-wrap gap-2">
-          <span class="rounded-full bg-white px-4 py-2 text-sm font-bold text-brand shadow-sm">All</span>
-          <span class="rounded-full bg-white px-4 py-2 text-sm font-bold text-muted shadow-sm">Dine-in</span>
-          <span class="rounded-full bg-white px-4 py-2 text-sm font-bold text-muted shadow-sm">Allergy orders</span>
-          <span class="rounded-full bg-white px-4 py-2 text-sm font-bold text-muted shadow-sm">Ready soon</span>
-        </div>
+        <section class="grid gap-6 sm:grid-cols-2 xl:grid-cols-4 items-start">
+          <div
+            v-for="column in columns"
+            :key="column.status"
+            class="flex flex-col rounded-3xl bg-white p-4 shadow-soft border-2 min-h-[600px]"
+            :class="{
+              'border-blue-400': column.status === 'new',
+              'border-amber-400': column.status === 'preparing',
+              'border-emerald-500': column.status === 'ready',
+              'border-stone-200': column.status === 'completed',
+            }"
+          >
+            <div
+              class="mb-4 flex items-center justify-between pb-3 border-b-2 transition-colors"
+              :class="{
+                'border-blue-400': column.status === 'new',
+                'border-amber-400': column.status === 'preparing',
+                'border-emerald-500': column.status === 'ready',
+                'border-stone-200': column.status === 'completed',
+              }"
+            >
+              <h2
+                class="font-black text-sm uppercase"
+                :class="{
+                  'text-blue-600': column.status === 'new',
+                  'text-amber-600': column.status === 'preparing',
+                  'text-emerald-600': column.status === 'ready',
+                  'text-stone-600': column.status === 'completed',
+                }"
+              >
+                {{ column.title }}
+              </h2>
+              <span
+                class="bg-stone-100 px-2 py-1 rounded-full text-xs font-bold"
+                >{{
+                  filteredOrders.filter((o) => o.status === column.status)
+                    .length
+                }}</span
+              >
+            </div>
 
-        <section class="grid gap-5 xl:grid-cols-4">
-          <div v-for="column in columns" :key="column.status" class="rounded-3xl bg-white/60 p-4">
-            <h2 class="mb-4 flex items-center justify-between font-black text-brand">
-              {{ column.title }}
-              <span class="rounded-full bg-brand px-2.5 py-1 text-xs text-white">{{ state.orders.filter(order => order.status === column.status).length }}</span>
-            </h2>
-
-            <div class="space-y-4">
-              <article v-for="order in state.orders.filter(order => order.status === column.status)" :key="order.id" class="section-card p-4">
-                <div class="flex items-start justify-between gap-3">
+            <div class="flex-1 space-y-4 overflow-y-auto max-h-[700px]">
+              <article
+                v-for="order in filteredOrders.filter(
+                  (o) => o.status === column.status,
+                )"
+                :key="order.id"
+                class="section-card rounded-2xl bg-white p-5 border border-stone-100 transition hover:shadow-md"
+              >
+                <div class="flex justify-between items-start mb-4">
                   <div>
-                    <h3 class="font-black">Order #{{ order.orderNumber }}</h3>
-                    <p class="text-sm text-muted">Table {{ order.tableNumber }} · {{ order.time }}</p>
+                    <h3 class="font-black text-lg">#{{ order.orderNumber }}</h3>
+                    <div class="flex items-center gap-2 mt-0.5">
+                      <p class="text-xs text-stone-500 font-medium">
+                        Table {{ order.tableNumber }}
+                      </p>
+                      <span
+                        class="text-[10px] font-bold text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded uppercase"
+                      >
+                        {{ order.time }}
+                      </span>
+                    </div>
                   </div>
                   <StatusPill :status="order.status" />
                 </div>
-                <div class="mt-4 space-y-2 text-sm">
-                  <p v-for="item in order.items" :key="item.name">
-                    <strong>{{ item.quantity }}× {{ item.name }}</strong>
-                    <span v-if="item.note" class="block text-muted">Note: {{ item.note }}</span>
-                  </p>
+
+                <div class="mt-4 pt-3 text-sm">
+                  <div
+                    v-for="item in order.items"
+                    :key="item.id"
+                    class="flex flex-col gap-1 mb-2"
+                  >
+                    <div class="flex gap-2">
+                      <span class="text-brand font-bold"
+                        >{{ item.quantity }}×</span
+                      >
+                      <span
+                        :class="[
+                          'font-medium transition-colors',
+                          item.isAllergy
+                            ? 'text-red-600 font-black'
+                            : 'text-stone-800',
+                        ]"
+                      >
+                        {{ item.name }}
+                      </span>
+                    </div>
+
+                    <div
+                      v-if="item.note && item.note.trim() !== ''"
+                      :class="[
+                        'ml-6 text-[11px] italic px-2 py-1 rounded border-l-2 mt-1 transition-colors',
+                        item.isAllergy
+                          ? 'bg-red-50 border-red-500 text-red-700 font-bold'
+                          : 'bg-stone-50 border-stone-200 text-stone-500',
+                      ]"
+                    >
+                      <span class="mr-1 uppercase">
+                        {{
+                          item.isAllergy
+                            ? state.language === "en"
+                              ? "Allergy Alert:"
+                              : "แจ้งเตือนแพ้อาหาร:"
+                            : state.language === "en"
+                              ? "Note:"
+                              : "หมายเหตุ:"
+                        }}
+                      </span>
+                      {{ item.note }}
+                    </div>
+                  </div>
                 </div>
-                <p v-if="order.allergies.length" class="mt-4 rounded-2xl bg-red-50 px-3 py-2 text-sm font-bold text-red-700">
-                  Allergy Alert: {{ order.allergies.join(', ') }}
-                </p>
-                <p v-if="order.customerNote" class="mt-3 rounded-2xl bg-pale px-3 py-2 text-sm text-muted">“{{ order.customerNote }}”</p>
-                <button v-if="column.action" class="primary-btn mt-4 w-full py-2 text-sm" @click="updateOrderStatus(order.orderNumber, column.next)">
-                  {{ column.action }}
-                </button>
-                <p v-else class="mt-4 rounded-2xl bg-pale px-3 py-2 text-center text-sm font-bold text-brand">Completed</p>
+
+                <div
+                  v-if="order.customerNote && order.customerNote.trim() !== ''"
+                  class="mt-3 p-3 bg-amber-50 border border-amber-100 rounded-xl text-xs italic text-amber-900"
+                >
+                  <span class="font-bold uppercase tracking-wider block mb-1">
+                    {{ state.language === "en" ? "Note:" : "หมายเหตุ:" }}
+                  </span>
+                  &ldquo;{{ order.customerNote }}&rdquo;
+                </div>
+
+                <div class="mt-5 pt-3">
+                  <button
+                    v-if="column.action"
+                    @click="updateOrderStatus(order.id, column.next)"
+                    class="w-full rounded-xl py-2.5 text-xs font-bold bg-[#2e7d32] text-white hover:bg-[#428a46]"
+                  >
+                    {{ column.action }}
+                  </button>
+                  <div
+                    v-else
+                    class="rounded-xl bg-stone-100 py-2 text-center text-xs font-bold text-stone-500 uppercase"
+                  >
+                    {{
+                      state.language === "en" ? "Completed" : "จัดเก็บเรียบร้อย"
+                    }}
+                  </div>
+                </div>
               </article>
             </div>
           </div>
         </section>
       </main>
     </div>
-    <MobileNav :items="navItems" />
   </div>
 </template>

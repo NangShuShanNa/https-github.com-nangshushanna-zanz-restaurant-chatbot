@@ -1,59 +1,171 @@
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
-import { Trash2 } from '@lucide/vue'
-import { useRouter } from 'vue-router'
-import MobileNav from '../../components/MobileNav.vue'
-import QuantityControl from '../../components/QuantityControl.vue'
-import SideNav from '../../components/SideNav.vue'
-import TagList from '../../components/TagList.vue'
-import TopBar from '../../components/TopBar.vue'
-import ChatPanel from '../../components/ChatPanel.vue'
-import { useAppState } from '../../services/appState'
+import { computed, reactive, ref, watch } from "vue";
+import { Trash2 } from "@lucide/vue";
+import { useRouter } from "vue-router";
+import MobileNav from "../../components/MobileNav.vue";
+import QuantityControl from "../../components/QuantityControl.vue";
+import SideNav from "../../components/SideNav.vue";
+import TagList from "../../components/TagList.vue";
+import TopBar from "../../components/TopBarCustomer.vue";
+import ChatPanel from "../../components/ChatPanel.vue";
+import { useAppState } from "../../services/appState";
+import { supabase } from "../../supabaseClient";
 
-const router = useRouter()
-const { state, cartItems, subtotal, total, serviceFee, conflictItems, updateCartItem, removeFromCart, createOrder, localizeMenuItem } = useAppState()
-const tableNumber = ref('T-24')
-const customerNote = ref('')
-const noteDrafts = reactive({})
-const savedNoteId = ref('')
+const router = useRouter();
+// Fetch data and actions from the App's Global State
+const {
+  state,
+  cartItems,
+  subtotal,
+  total,
+  serviceFee,
+  conflictItems,
+  updateCartItem,
+  removeFromCart,
+  createOrder,
+  localizeMenuItem,
+} = useAppState();
 
+// Define variables for the order page
+const tableNumber = ref("T-24");
+const customerNote = ref("");
+const noteDrafts = reactive({});
+const savedNoteId = ref("");
+const isSubmitting = ref(false);
+const showSuccess = ref(false);
+const lastOrderId = ref(null);
+
+// Menu items to display in the SideNav
 const navItems = [
-  { label: 'Starters', to: '/customer/menu', short: 'Menu' },
-  { label: 'Main Courses', to: '/customer/menu', short: 'Mains' },
-  { label: 'Drinks', to: '/customer/menu' },
-  { label: 'Check Order Status', to: '/customer/order-status', short: 'Status' },
-]
+  { label: "Starters", to: "/customer/menu", short: "Menu" },
+  { label: "Main Courses", to: "/customer/menu", short: "Mains" },
+  { label: "Drinks", to: "/customer/menu" },
+  {
+    label: "Check Order Status",
+    to: "/customer/order-status",
+    short: "Status",
+  },
+];
 
-const conflictsById = computed(() => Object.fromEntries(conflictItems.value.map((item) => [item.id, true])))
-const localizedCartItems = computed(() => cartItems.value.map(localizeMenuItem))
+// Calculate items with conflicts (e.g., allergens)
+const conflictsById = computed(() =>
+  Object.fromEntries(conflictItems.value.map((item) => [item.id, true])),
+);
+// Localize cart items based on the user's language settings
+const localizedCartItems = computed(() =>
+  cartItems.value.map(localizeMenuItem),
+);
 
+// Format order ID for customer display
+const orderDisplayId = computed(() => {
+  return lastOrderId.value ? `A-${100 + lastOrderId.value}` : "A-000";
+});
+
+// Watch cart items and prepare note drafts for each item
 watch(
   cartItems,
   (items) => {
     items.forEach((item) => {
-      if (noteDrafts[item.id] === undefined) noteDrafts[item.id] = item.note || ''
-    })
+      if (noteDrafts[item.id] === undefined)
+        noteDrafts[item.id] = item.note || "";
+    });
   },
   { immediate: true },
-)
+);
 
+// Function to save notes for individual items
 function saveItemNote(item) {
-  updateCartItem(item.id, { note: noteDrafts[item.id] || '' })
-  savedNoteId.value = item.id
+  updateCartItem(item.id, { note: noteDrafts[item.id] || "" });
+  savedNoteId.value = item.id;
 }
 
-function submitOrder() {
-  if (!cartItems.value.length) return
-  const order = createOrder({ tableNumber: tableNumber.value, customerNote: customerNote.value })
-  router.push(`/customer/order-confirmation/${order.orderNumber}`)
+// Main function to submit the order to the Database
+async function submitOrder() {
+  if (!cartItems.value.length || isSubmitting.value) return;
+  isSubmitting.value = true;
+
+  try {
+    // 1. Create an order record in the 'orders' table
+    const { data: orderData, error: orderError } = await supabase
+      .from("orders")
+      .insert([
+        {
+          table_number: tableNumber.value,
+          customer_note: customerNote.value,
+          total_price: total.value,
+          status: "pending",
+        },
+      ])
+      .select("id")
+      .single();
+
+    if (orderError) throw orderError;
+
+    const orderId = orderData.id;
+    lastOrderId.value = orderId; 
+
+    localStorage.setItem('zank-active-order-id', orderId);
+
+    // 2. Prepare item data for the 'order_items' table
+    const orderItemsPayload = cartItems.value.map((item) => ({
+      order_id: orderId,
+      menu_id: item.id,
+      menu_name: item.displayName || item.name || "Unknown Menu",
+      quantity: item.quantity,
+      price_at_order: parseFloat(item.price) || 0,
+      note: noteDrafts[item.id] || "",
+    }));
+
+    // 3. Save all food items to the Database
+    const { error: itemsError } = await supabase
+      .from("order_items")
+      .insert(orderItemsPayload);
+
+    if (itemsError) throw itemsError;
+
+    // 4. Show success status
+    showSuccess.value = true;
+
+    // Clear cart and order state
+    createOrder({
+      tableNumber: tableNumber.value,
+      customerNote: customerNote.value,
+    });
+
+    // Delay for 2 seconds to let the user see the success modal before redirecting
+    setTimeout(() => {
+      router.push(`/customer/order-confirmation/${orderId}`);
+    }, 2000);
+  } catch (error) {
+    console.error("Supabase Error Details:", error);
+    alert("Failed to submit order: " + error.message);
+  } finally {
+    isSubmitting.value = false;
+  }
 }
+
+// Function to navigate back to the menu page
+function handleBackToMenu() {
+  state.selectedCategory = "All";
+  router.push("/customer/menu");
+}
+
+// Calculate total item quantity in the cart to display on TopBar
+const totalCartQuantity = computed(() => {
+  return cartItems.value.reduce((total, item) => total + item.quantity, 0);
+});
 </script>
 
 <template>
   <div class="page-shell">
-    <TopBar :cart-count="cartItems.length" />
+    <TopBar :cart-count="totalCartQuantity" />
     <div class="content-shell">
-      <SideNav :items="navItems" bottom-label="Back to Menu" />
+      <SideNav
+        :items="navItems"
+        bottom-label="Back to Menu"
+        @click="handleBackToMenu"
+      />
+      <!-- Main content area -->
       <main class="main-panel">
         <div class="grid gap-6 xl:grid-cols-[1fr_360px]">
           <section>
@@ -61,25 +173,55 @@ function submitOrder() {
             <p class="mt-2 text-muted">Check your basket before submitting.</p>
             <p class="mt-4 text-sm text-muted">
               <strong class="text-stone-900">Preferences:</strong>
-              {{ state.customerPreferences.join(', ') }}
+              {{ state.customerPreferences.join(", ") }}
               <button class="ml-2 font-bold text-brand">Edit</button>
             </p>
 
+            <!-- Display items in the cart -->
             <div class="mt-6 space-y-4">
-              <article v-for="item in localizedCartItems" :key="item.id" class="section-card grid gap-4 p-4 md:grid-cols-[140px_1fr_auto]">
-                <img :src="item.image" :alt="item.displayName" class="h-32 w-full rounded-2xl object-cover md:w-36" />
+              <article
+                v-for="item in localizedCartItems"
+                :key="item.id"
+                class="section-card grid gap-4 p-4 md:grid-cols-[140px_1fr_auto]"
+              >
+                <img
+                  :src="item.image"
+                  :alt="item.displayName"
+                  class="h-32 w-full rounded-2xl object-cover md:w-36"
+                />
                 <div>
                   <div class="flex flex-wrap justify-between gap-3">
                     <h2 class="text-xl font-black">{{ item.displayName }}</h2>
                     <strong class="text-brand">{{ item.price }} Baht</strong>
                   </div>
-                  <p class="mt-2 text-sm text-muted">{{ item.displayDescription }}</p>
-                  <TagList class="mt-3" :tags="[...item.displayTasteProfiles.slice(0, 1), ...item.displayDietaryTags.slice(0, 1), ...item.displayAllergens.map(a => `Contains ${a}`).slice(0, 1)]" />
-                  <div v-if="conflictsById[item.id]" class="mt-3 rounded-2xl bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-800">
-                    Warning: This item contains {{ item.allergens.join(', ') }}.
-                    <button class="ml-3 font-black text-red-600" @click="removeFromCart(item.id)">Remove</button>
+                  <p class="mt-2 text-sm text-muted">
+                    {{ item.displayDescription }}
+                  </p>
+                  <TagList
+                    class="mt-3"
+                    :tags="[
+                      ...item.displayTasteProfiles.slice(0, 1),
+                      ...item.displayDietaryTags.slice(0, 1),
+                      ...item.displayAllergens
+                        .map((a) => `Contains ${a}`)
+                        .slice(0, 1),
+                    ]"
+                  />
+                  <!-- Alert for food allergen conflicts -->
+                  <div
+                    v-if="conflictsById[item.id]"
+                    class="mt-3 rounded-2xl bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-800"
+                  >
+                    Warning: This item contains {{ item.allergens.join(", ") }}.
+                    <button
+                      class="ml-3 font-black text-red-600"
+                      @click="removeFromCart(item.id)"
+                    >
+                      Remove
+                    </button>
                     <button class="ml-3 font-black text-brand">Replace</button>
                   </div>
+                  <!-- Input field for special notes on each item -->
                   <div class="mt-3 flex flex-col gap-2 sm:flex-row">
                     <input
                       class="field py-2"
@@ -87,34 +229,85 @@ function submitOrder() {
                       placeholder="Add note"
                       @input="noteDrafts[item.id] = $event.target.value"
                     />
-                    <button class="secondary-btn shrink-0 py-2 text-sm" @click="saveItemNote(item)">Save Note</button>
+                    <button
+                      class="secondary-btn shrink-0 py-2 text-sm"
+                      @click="saveItemNote(item)"
+                    >
+                      Save Note
+                    </button>
                   </div>
-                  <p v-if="savedNoteId === item.id" class="mt-2 text-xs font-bold text-brand">Note saved for this item.</p>
+                  <p
+                    v-if="savedNoteId === item.id"
+                    class="mt-2 text-xs font-bold text-brand"
+                  >
+                    Note saved for this item.
+                  </p>
                 </div>
-                <div class="flex items-center justify-between gap-3 md:flex-col">
-                  <QuantityControl :model-value="item.quantity" @update:model-value="updateCartItem(item.id, { quantity: $event })" />
-                  <button class="text-red-500" @click="removeFromCart(item.id)"><Trash2 :size="22" /></button>
+                <!-- Quantity adjustment and delete button section -->
+                <div
+                  class="flex items-center justify-between gap-3 md:flex-col"
+                >
+                  <QuantityControl
+                    :model-value="item.quantity"
+                    @update:model-value="
+                      updateCartItem(item.id, { quantity: $event })
+                    "
+                  />
+                  <button class="text-red-500" @click="removeFromCart(item.id)">
+                    <Trash2 :size="22" />
+                  </button>
                 </div>
               </article>
             </div>
 
             <div class="mt-6 grid gap-5 lg:grid-cols-2">
+              <!-- Table info and kitchen note section -->
               <section class="section-card p-5">
                 <h2 class="font-black">Dining Information</h2>
                 <div class="mt-4 grid gap-4 sm:grid-cols-2">
-                  <label class="text-sm font-bold">Table number<input v-model="tableNumber" class="field mt-2" /></label>
-                  <label class="text-sm font-bold">Kitchen note<input v-model="customerNote" class="field mt-2" placeholder="e.g., no onion, less spicy" /></label>
+                  <label class="text-sm font-bold"
+                    >Table number<input
+                      v-model="tableNumber"
+                      class="field mt-2"
+                  /></label>
+                  <label class="text-sm font-bold"
+                    >Kitchen note<input
+                      v-model="customerNote"
+                      class="field mt-2"
+                      placeholder="e.g., no onion, less spicy"
+                  /></label>
                 </div>
               </section>
+              <!-- Order summary and checkout confirmation -->
               <section class="section-card p-5">
                 <h2 class="font-black">Order Summary</h2>
                 <div class="mt-4 space-y-3 text-sm">
-                  <p class="flex justify-between"><span>Subtotal</span><strong>{{ subtotal }} Baht</strong></p>
-                  <p class="flex justify-between"><span>Service Fee</span><strong>{{ cartItems.length ? serviceFee : 0 }} Baht</strong></p>
-                  <p class="flex justify-between border-t border-stone-100 pt-3 text-lg"><span>Total</span><strong class="text-brand">{{ total }} Baht</strong></p>
+                  <p class="flex justify-between">
+                    <span>Subtotal</span><strong>{{ subtotal }} Baht</strong>
+                  </p>
+                  <p class="flex justify-between">
+                    <span>Service Fee</span
+                    ><strong
+                      >{{ cartItems.length ? serviceFee : 0 }} Baht</strong
+                    >
+                  </p>
+                  <p
+                    class="flex justify-between border-t border-stone-100 pt-3 text-lg"
+                  >
+                    <span>Total</span
+                    ><strong class="text-brand">{{ total }} Baht</strong>
+                  </p>
                 </div>
-                <button class="primary-btn mt-5 w-full" @click="submitOrder">Submit Order</button>
-                <p class="mt-3 text-center text-xs text-muted">Order number will be created after submitting.</p>
+                <button
+                  class="primary-btn mt-5 w-full"
+                  :disabled="isSubmitting"
+                  @click="submitOrder"
+                >
+                  {{ isSubmitting ? "Submitting..." : "Submit Order" }}
+                </button>
+                <p class="mt-3 text-center text-xs text-muted">
+                  Order number will be created after submitting.
+                </p>
               </section>
             </div>
           </section>
@@ -122,6 +315,25 @@ function submitOrder() {
         </div>
       </main>
     </div>
+
+    <!-- Success modal after order submission -->
+    <div
+      v-if="showSuccess"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
+    >
+      <div
+        class="bg-white p-8 rounded-3xl shadow-2xl text-center max-w-sm w-full mx-4"
+      >
+        <h2 class="text-2xl font-black text-brand">Order Sent to Kitchen!</h2>
+        <p class="text-xl font-bold text-stone-800 mt-2">
+          Order ID: {{ orderDisplayId }}
+        </p>
+        <p class="text-stone-500 mt-1">
+          Your order has been successfully placed.
+        </p>
+      </div>
+    </div>
+
     <MobileNav :items="navItems" />
   </div>
 </template>
