@@ -1,6 +1,6 @@
 <script setup>
 import { computed, reactive, ref, watch, onMounted } from "vue";
-import { Pencil, Plus, Trash2, X } from "@lucide/vue";
+import { Pencil, Plus, Trash2, X, LayoutList, TableProperties } from "@lucide/vue";
 import MobileNav from "../../components/MobileNav.vue";
 import SideNav from "../../components/SideNav.vue";
 import StatusPill from "../../components/StatusPill.vue";
@@ -26,6 +26,22 @@ const selected = ref(null);
 const isLoading = ref(false);
 const isModalOpen = ref(false); // Controls visibility for the "Add New" Modal Popup
 const contentLanguage = ref("en"); // Used only for the traditional Edit form side-tab
+const viewMode = ref("list"); // Controls view switching between 'list' and 'table'
+
+// State for toast notifications
+const alertInfo = ref({
+  show: false,
+  message: "",
+  type: "success", // 'success' | 'error'
+});
+
+// Trigger custom notification toast
+function triggerAlert(message, type = "success") {
+  alertInfo.value = { show: true, message, type };
+  setTimeout(() => {
+    alertInfo.value.show = false;
+  }, 3000);
+}
 
 // Form reactive states (Separated to prevent data collision)
 const form = reactive({}); // For Side-by-Side traditional Edit Item
@@ -36,15 +52,16 @@ async function fetchMenuItems() {
   isLoading.value = true;
   try {
     // Check global authentication fallback credentials
-    const savedUserJson = localStorage.getItem("zank-active-user");
+    const savedUserJson = sessionStorage.getItem("zank-active-user");
     if (!savedUserJson) throw new Error("No active session found.");
     const localUser = JSON.parse(savedUserJson);
 
     const { data, error } = await supabase
       .from("menu_items")
       .select("*")
+      .is("is_deleted", false)
       .eq("restaurant_id", localUser.restaurant_id) // Query items paired with the correct store
-      .order("created_at", { ascending: false });
+      .order("id", { ascending: true });
 
     if (error) throw error;
 
@@ -74,7 +91,7 @@ async function fetchMenuItems() {
       load(menuItems.value[0]);
     }
   } catch (error) {
-    alert("Error fetching data: " + error.message);
+    triggerAlert(state.language === 'en' ? "Error fetching data: " + error.message : "เกิดข้อผิดพลาดในการดึงข้อมูล", "error");
   } finally {
     isLoading.value = false;
   }
@@ -204,11 +221,11 @@ async function submitEdit() {
     if (error) throw error;
 
     await fetchMenuItems();
-    alert("Item updated successfully!");
+    triggerAlert(state.language === 'en' ? "Item updated successfully!" : "อัปเดตเมนูสำเร็จแล้ว", "success");
 
     window.scrollTo({ top: 0, behavior: "smooth" });
   } catch (error) {
-    alert("Error updating data: " + error.message);
+    triggerAlert(state.language === 'en' ? "Error updating data: " + error.message : "เกิดข้อผิดพลาดในการอัปเดตข้อมูล", "error");
   }
 }
 
@@ -304,44 +321,80 @@ async function submitAdd() {
       availability: addForm.availability,
     };
 
-    const { error } = await supabase.from("menu_items") .insert([payload]);
+    const { error } = await supabase.from("menu_items").insert([payload]);
     if (error) throw error;
 
     isModalOpen.value = false;
     await fetchMenuItems();
-    alert("New item added successfully!");
+    triggerAlert(state.language === 'en' ? "New item added successfully!" : "เพิ่มรายการเมนูใหม่สำเร็จแล้ว!", "success");
 
     window.scrollTo({ top: 0, behavior: "smooth" });
   } catch (error) {
-    alert("Error creating item: " + error.message);
+    triggerAlert(state.language === 'en' ? "Error creating item: " + error.message : "เกิดข้อผิดพลาดในการสร้างรายการใหม่", "error");
   }
 }
 
-// 6. Delete item from Supabase
+// 6. Soft Delete item from Supabase
 async function removeItem(item) {
-  if (!confirm(`Are you sure you want to delete ${item.name}?`)) return;
+  const confirmMsg = state.language === 'en' 
+    ? `Are you sure you want to delete ${item.name}?` 
+    : `คุณแน่ใจหรือไม่ว่าต้องการลบ ${item.nameTh || item.name}?`;
+    
+  if (!confirm(confirmMsg)) return;
 
   try {
+    // Switch from using .delete() to updating the is_deleted flag to true
     const { error } = await supabase
       .from("menu_items")
-      .delete()
+      .update({ is_deleted: true })
       .eq("id", item.id);
+      
     if (error) throw error;
 
+    // Update the UI by removing the item from the array
     menuItems.value = menuItems.value.filter((i) => i.id !== item.id);
     if (menuItems.value.length > 0) {
       load(menuItems.value[0]);
     } else {
       selected.value = null;
     }
+    
+    triggerAlert(state.language === 'en' ? "Item deleted successfully." : "ลบรายการเมนูสำเร็จแล้ว", "success");
   } catch (error) {
-    alert("Error deleting item: " + error.message);
+    triggerAlert(state.language === 'en' ? "Error deleting item: " + error.message : "เกิดข้อผิดพลาดในการลบรายการ", "error");
   }
 }
 </script>
 
 <template>
-  <div class="page-shell">
+  <div class="page-shell relative">
+    
+    <!-- แจ้งเตือน Toast Notification -->
+    <Transition
+      enter-active-class="transform ease-out duration-300 transition"
+      enter-from-class="translate-y-2 opacity-0 sm:translate-y-0 sm:translate-x-2"
+      enter-to-class="translate-y-0 opacity-100 sm:translate-x-0"
+      leave-active-class="transition ease-in duration-100"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <div
+        v-if="alertInfo.show"
+        class="fixed top-5 right-5 z-[999] flex items-center w-full max-w-xs p-4 rounded-xl shadow-lg border text-sm font-bold tracking-tight"
+        :class="
+          alertInfo.type === 'success'
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+            : 'bg-red-50 border-red-200 text-red-800'
+        "
+      >
+        <div class="mr-3 flex-shrink-0">
+          <span v-if="alertInfo.type === 'success'"></span>
+          <span v-else></span>
+        </div>
+        <div>{{ alertInfo.message }}</div>
+      </div>
+    </Transition>
+
     <TopBar owner search-placeholder="Search menu items or ingredients" />
     <div class="content-shell">
       <SideNav :items="ownerNav" />
@@ -355,12 +408,15 @@ async function removeItem(item) {
               {{ state.language === 'en' ? 'Manage dishes, ingredients, allergens, taste profiles, and availability.' : 'จัดการรายละเอียดอาหาร, ส่วนผสม, สารก่อภูมิแพ้, รสชาติ และสถานะการขาย' }}
             </p>
           </div>
-          <button
-            class="primary-btn inline-flex items-center gap-2"
-            @click="addNew"
-          >
-            <Plus :size="18" /> {{ state.language === 'en' ? 'Add Menu Item' : 'เพิ่มรายการเมนูใหม่' }}
-          </button>
+          
+          <div class="flex items-center gap-3">
+            <button
+              class="primary-btn inline-flex items-center gap-2"
+              @click="addNew"
+            >
+              <Plus :size="18" /> {{ state.language === 'en' ? 'Add Menu Item' : 'เพิ่มรายการเมนูใหม่' }}
+            </button>
+          </div>
         </div>
 
         <section class="grid gap-6 xl:grid-cols-[1fr_420px] items-start">
@@ -369,43 +425,94 @@ async function removeItem(item) {
             <div v-if="isLoading" class="p-5 text-center text-muted">
               Loading menu items...
             </div>
-            <div v-else class="divide-y divide-stone-100">
-              <article
-                v-for="item in menuItems"
-                :key="item.id"
-                class="grid cursor-pointer gap-4 p-5 transition hover:bg-pale lg:grid-cols-[80px_1.2fr_.7fr_.7fr_1fr_auto] lg:items-center"
-                :class="selected?.id === item.id ? 'bg-pale ring-2 ring-brand/20' : ''"
-                @click="load(item)"
-              >
-                <img
-                  :src="item.image"
-                  :alt="item.name"
-                  class="h-20 w-20 rounded-2xl object-cover"
-                />
-                <div>
-                  <strong>{{ state.language === 'th' ? (item.nameTh || item.name) : item.name }}</strong>
-                  <p v-if="item.nameTh && state.language === 'en'" class="text-sm font-semibold text-brand">
-                    {{ item.nameTh }}
-                  </p>
-                  <p class="text-sm text-muted">{{ item.category }}</p>
-                </div>
-                <span class="font-bold text-brand">{{ item.price }} Baht</span>
-                <StatusPill :status="item.availability" />
-                <TagList
-                  :tags="[
-                    ...item.tasteProfiles.slice(0, 1),
-                    ...item.allergens.slice(0, 1).map((a) => `Contains ${a}`),
-                  ]"
-                />
-                <div class="flex flex-wrap gap-2">
-                  <button
-                    class="rounded-full border border-red-100 px-4 py-2 text-sm font-bold text-red-600 transition hover:bg-red-50 bg-white"
-                    @click.stop="removeItem(item)"
-                  >
-                    <Trash2 :size="16" class="inline" /> {{ state.language === 'en' ? 'Delete' : 'ลบออก' }}
-                  </button>
-                </div>
-              </article>
+            <div v-else>
+              <div v-if="viewMode === 'list'" class="divide-y divide-stone-100">
+                <article
+                  v-for="item in menuItems"
+                  :key="item.id"
+                  class="grid cursor-pointer gap-4 p-5 transition hover:bg-pale lg:grid-cols-[80px_1.2fr_.7fr_.7fr_1fr_auto] lg:items-center"
+                  :class="selected?.id === item.id ? 'bg-pale ring-2 ring-brand/20' : ''"
+                  @click="load(item)"
+                >
+                  <img
+                    :src="item.image"
+                    :alt="item.name"
+                    class="h-20 w-20 rounded-2xl object-cover"
+                  />
+                  <div>
+                    <strong>{{ state.language === 'th' ? (item.nameTh || item.name) : item.name }}</strong>
+                    <p v-if="item.nameTh && state.language === 'en'" class="text-sm font-semibold text-brand">
+                      {{ item.nameTh }}
+                    </p>
+                    <p class="text-sm text-muted">{{ item.category }}</p>
+                  </div>
+                  <span class="font-bold text-brand">{{ item.price }} Baht</span>
+                  <StatusPill :status="item.availability" />
+                  <TagList
+                    :tags="[
+                      ...item.tasteProfiles.slice(0, 1),
+                      ...item.allergens.slice(0, 1).map((a) => `Contains ${a}`),
+                    ]"
+                  />
+                  <div class="flex flex-wrap gap-2">
+                    <button
+                      class="rounded-full border border-red-100 px-4 py-2 text-sm font-bold text-red-600 transition hover:bg-red-50 bg-white"
+                      @click.stop="removeItem(item)"
+                    >
+                      <Trash2 :size="16" class="inline" /> {{ state.language === 'en' ? 'Delete' : 'ลบออก' }}
+                    </button>
+                  </div>
+                </article>
+              </div>
+
+              <div v-else class="overflow-x-auto custom-scrollbar">
+                <table class="w-full text-left border-collapse min-w-[600px]">
+                  <thead>
+                    <tr class="bg-stone-50 border-b border-stone-100 text-stone-600 text-sm font-bold">
+                      <th class="p-4 w-24">{{ state.language === 'en' ? 'Image' : 'รูปภาพ' }}</th>
+                      <th class="p-4">{{ state.language === 'en' ? 'Name' : 'ชื่อเมนู' }}</th>
+                      <th class="p-4">{{ state.language === 'en' ? 'Category' : 'หมวดหมู่' }}</th>
+                      <th class="p-4">{{ state.language === 'en' ? 'Price' : 'ราคา' }}</th>
+                      <th class="p-4">{{ state.language === 'en' ? 'Status' : 'สถานะ' }}</th>
+                      <th class="p-4 text-center">{{ state.language === 'en' ? 'Actions' : 'จัดการ' }}</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-stone-100 text-sm">
+                    <tr 
+                      v-for="item in menuItems" 
+                      :key="item.id"
+                      class="hover:bg-pale cursor-pointer transition"
+                      :class="selected?.id === item.id ? 'bg-pale font-medium ring-1 ring-brand/10' : ''"
+                      @click="load(item)"
+                    >
+                      <td class="p-4">
+                        <img :src="item.image" :alt="item.name" class="h-12 w-12 rounded-xl object-cover" />
+                      </td>
+                      <td class="p-4">
+                        <div class="font-bold text-stone-800">
+                          {{ state.language === 'th' ? (item.nameTh || item.name) : item.name }}
+                        </div>
+                        <div v-if="state.language === 'en' && item.nameTh" class="text-xs text-brand font-medium">
+                          {{ item.nameTh }}
+                        </div>
+                      </td>
+                      <td class="p-4 text-stone-500">{{ item.category }}</td>
+                      <td class="p-4 font-bold text-brand">{{ item.price }} ฿</td>
+                      <td class="p-4">
+                        <StatusPill :status="item.availability" />
+                      </td>
+                      <td class="p-4 text-center" @click.stop>
+                        <button 
+                          class="p-2 text-red-600 hover:bg-red-50 rounded-xl transition"
+                          @click="removeItem(item)"
+                        >
+                          <Trash2 :size="18" />
+                        </button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </article>
 
