@@ -98,7 +98,8 @@ async function fetchTables() {
 function generateTableUrl(tableNumber) {
   const baseUrl = window.location.origin;
   if (!restaurantId.value) return "";
-  return `${baseUrl}/customer/menu?restaurantId=${restaurantId.value}&tableId=${tableNumber}`;
+  // เติม /mobile เข้าไป เพื่อให้ลูกค้าสแกนแล้วไปหน้า Mobile Menu
+  return `${baseUrl}/customer/menu/mobile?restaurantId=${restaurantId.value}&tableId=${tableNumber}`;
 }
 
 async function generateTables() {
