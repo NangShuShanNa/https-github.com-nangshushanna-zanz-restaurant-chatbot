@@ -9,7 +9,128 @@ import TopBar from "../../components/TopBar.vue";
 import { useAppState } from "../../services/appState";
 
 const router = useRouter();
-const { state, toggleLanguage, updateOrderStatus, signOut } = useAppState();
+const { state } = useAppState();
+
+const orders = ref([]);
+const activeFilter = ref("all");
+
+const navItems = computed(() => [
+  {
+    label: state.language === "en" ? "Live Orders" : "ออเดอร์สด",
+    to: "/staff/live-orders",
+  },
+  {
+    label: state.language === "en" ? "Menu Items" : "รายการเมนู",
+    to: "/staff/menu-items",
+  },
+  { label: state.language === "en" ? "Logout" : "ออกจากระบบ", to: "/logout" },
+]);
+
+async function fetchOrders() {
+  const { data, error } = await supabase
+    .from("orders")
+    .select("*, order_items (*)")
+    .order("created_at", { ascending: true }); // Sort by oldest order first
+
+  if (error) {
+    console.error("Supabase Error:", error);
+    return;
+  }
+
+  const allergyKeywords = [
+    "no onion",
+    "no peanuts",
+    "no shrimp",
+    "no dairy",
+    "no egg",
+    "allergic",
+    "แพ้",
+  ];
+
+  orders.value = data.map((order) => ({
+    id: order.id,
+    orderNumber: order.order_code || `A-${100 + order.id}`,
+    tableNumber: order.table_number?.replace("T-", "") || "?",
+    time: new Date(order.created_at).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    status: order.status === "pending" ? "new" : order.status,
+    items: (order.order_items || []).map((item, index) => {
+      const noteText = (item.note || "").toLowerCase();
+      const isAllergy = allergyKeywords.some((keyword) =>
+        noteText.includes(keyword),
+      );
+
+      return {
+        id: `${order.id}-${item.id}-${index}`, // Ensure unique id for each item
+        name: item.menu_name,
+        quantity: item.quantity,
+        note: item.note,
+        isAllergy: isAllergy,
+      };
+    }),
+    customerNote: order.customer_note,
+    allergies: order.allergies || [],
+    type: order.type || "dine_in",
+  }));
+}
+
+// Pass order id directly instead of parsing from string
+async function updateOrderStatus(orderId, nextStatus) {
+  console.log(`Updating Database - ID: ${orderId} | Status: ${nextStatus}`);
+
+  // 1. ดึงเวลาปัจจุบัน
+  const now = new Date().toISOString();
+
+  // 2. อัปเดต UI ทันที (เพื่อให้การ์ดกระโดดไปคอลัมน์ถัดไปแบบไม่ต้องรอโหลด)
+  const orderIndex = orders.value.findIndex((o) => o.id === orderId);
+  if (orderIndex !== -1) {
+    // ปรับชื่อสถานะให้ตรงกับที่ UI ใช้ (ถ้าเป็น pending ให้ใช้ new)
+    orders.value[orderIndex].status =
+      nextStatus === "pending" ? "new" : nextStatus;
+  }
+
+  // 3. ส่งข้อมูลไปบันทึกที่ Supabase พร้อมกับเวลาที่กดปุ่ม
+  const { error } = await supabase
+    .from("orders")
+    .update({
+      status: nextStatus,
+      updated_at: now, // บันทึกเวลาล่าสุดลง Database
+    })
+    .eq("id", orderId);
+
+  if (error) {
+    console.error("Update Status Error:", error);
+    alert("Update failed: " + error.message);
+    // ถ้ายืนยันผิดพลาด ให้ดึงข้อมูลใหม่เพื่อคืนค่าเดิม
+    await fetchOrders();
+  } else {
+    console.log("Update successful!");
+    // ดึงข้อมูลมา sync ให้ตรงกับ Database อีกครั้งเพื่อความชัวร์
+    await fetchOrders();
+  }
+}
+
+let channel;
+onMounted(() => {
+  fetchOrders();
+
+  channel = supabase
+    .channel("public:orders") // Use standard Supabase channel name
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "orders" },
+      () => {
+        fetchOrders(); // Refresh data on update
+      },
+    )
+    .subscribe();
+});
+
+onUnmounted(() => {
+  if (channel) supabase.removeChannel(channel);
+});
 
 const columns = computed(() => [
   {
@@ -127,84 +248,63 @@ function logout() {
           <div
             v-for="column in columns"
             :key="column.status"
-            class="flex flex-col rounded-3xl bg-white p-4 shadow-soft border min-h-[600px] transition-all duration-200"
-            :class="[
-              column.status === 'new'
-                ? 'border-blue-100 ring-4 ring-blue-50/30'
-                : '',
-              column.status === 'preparing'
-                ? 'border-amber-100 ring-4 ring-amber-50/30'
-                : '',
-              column.status === 'ready'
-                ? 'border-brand/20 ring-4 ring-pale/40'
-                : '',
-              column.status === 'completed'
-                ? 'border-stone-200 bg-stone-50/40'
-                : '',
-            ]"
+            class="flex flex-col rounded-3xl bg-white p-4 shadow-soft border-2 min-h-[600px] overflow-hidden transition-colors"
+            :class="{
+              'border-blue-400': column.status === 'new',
+              'border-amber-400': column.status === 'preparing',
+              'border-emerald-400': column.status === 'ready',
+              'border-green-400': column.status === 'completed',
+            }"
           >
+            <!-- Header Section (ใช้สีโทน 50 เป็น Background) -->
             <div
-              class="mb-4 flex items-center justify-between pb-3 border-b"
-              :class="[
-                column.status === 'new' ? 'border-blue-100' : '',
-                column.status === 'preparing' ? 'border-amber-100' : '',
-                column.status === 'ready' ? 'border-stone-100' : '',
-                column.status === 'completed' ? 'border-stone-200' : '',
-              ]"
+              class="-mx-4 -mt-4 mb-4 flex items-center justify-between px-4 py-3 border-b-2 transition-colors"
+              :class="{
+                'bg-blue-50 border-blue-400': column.status === 'new',
+                'bg-amber-50 border-amber-400': column.status === 'preparing',
+                'bg-emerald-50 border-emerald-400': column.status === 'ready',
+                'bg-green-50 border-green-400': column.status === 'completed',
+              }"
             >
-              <div class="flex items-center gap-2">
-                <span
-                  class="h-2.5 w-2.5 rounded-full"
-                  :class="[
-                    column.status === 'new' ? 'bg-blue-500 animate-pulse' : '',
-                    column.status === 'preparing' ? 'bg-amber-500' : '',
-                    column.status === 'ready' ? 'bg-brand' : '',
-                    column.status === 'completed' ? 'bg-stone-400' : '',
-                  ]"
-                ></span>
-                <h2
-                  class="font-black text-stone-800 tracking-wide text-sm uppercase"
-                >
-                  {{ column.title }}
-                </h2>
-              </div>
+              <h2
+                class="font-black text-sm uppercase flex items-center gap-2"
+                :class="{
+                  'text-blue-600': column.status === 'new',
+                  'text-amber-600': column.status === 'preparing',
+                  'text-emerald-600': column.status === 'ready',
+                  'text-green-600': column.status === 'completed',
+                }"
+              >
+                {{ column.title }}
+              </h2>
 
+              <!-- Badge Section (ใช้สีโทน 100 เป็นพื้นหลัง และโทน 600 เป็นสีตัวอักษร) -->
               <span
-                class="grid h-6 min-w-6 place-items-center rounded-full px-2 text-xs font-black shadow-xs"
-                :class="[
-                  column.status === 'new'
-                    ? 'bg-blue-50 text-blue-700 border border-blue-100'
-                    : '',
-                  column.status === 'preparing'
-                    ? 'bg-amber-50 text-amber-700 border border-amber-100'
-                    : '',
-                  column.status === 'ready'
-                    ? 'bg-pale text-brand border border-brand/10'
-                    : '',
-                  column.status === 'completed'
-                    ? 'bg-stone-200 text-stone-600'
-                    : '',
-                ]"
+                class="px-2.5 py-1 rounded-full text-xs font-bold transition-colors"
+                :class="{
+                  'bg-blue-100 text-blue-600': column.status === 'new',
+                  'bg-amber-100 text-amber-600': column.status === 'preparing',
+                  'bg-emerald-100 text-emerald-600': column.status === 'ready',
+                  'bg-green-100 text-green-600': column.status === 'completed',
+                }"
               >
                 {{
-                  state.orders.filter((order) => order.status === column.status)
+                  filteredOrders.filter((o) => o.status === column.status)
                     .length
                 }}
               </span>
             </div>
 
-            <div class="flex-1 space-y-4 overflow-y-auto max-h-[700px] pr-1">
+            <!-- Order Cards -->
+            <div
+              class="flex-1 space-y-4 overflow-y-auto max-h-[700px] px-1 pb-2 scrollbar-hide"
+            >
               <article
                 v-for="order in state.orders.filter(
                   (order) => order.status === column.status,
                 )"
                 :key="order.id"
-                class="section-card rounded-2xl bg-white p-5 border border-stone-100/80 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5"
-                :class="
-                  column.status === 'completed'
-                    ? 'opacity-70 grayscale-[30%]'
-                    : ''
-                "
+                class="section-card rounded-2xl bg-white p-5 border border-stone-100 transition hover:shadow-md hover:border-stone-200"
               >
                 <div class="flex items-start justify-between gap-3">
                   <div>
@@ -255,35 +355,35 @@ function logout() {
                   }}: {{ order.allergies.join(", ") }}
                 </div>
 
-                <blockquote
-                  v-if="order.customerNote"
-                  class="mt-3 rounded-xl bg-stone-50 border border-stone-200/50 px-3 py-2 text-xs italic text-stone-600"
-                >
-                  &ldquo;{{ order.customerNote }}&rdquo;
-                </blockquote>
-
-                <div class="mt-5 border-t border-stone-100 pt-3">
+                <div class="mt-5 pt-4 border-t border-stone-50">
+                  <!-- Action Button (ใช้สีโทน 600 เป็นพื้นหลัง) -->
                   <button
                     v-if="column.action"
-                    class="w-full rounded-xl py-2.5 text-xs font-bold tracking-wider uppercase transition active:scale-95 shadow-sm border"
-                    :class="[
-                      column.status === 'new'
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white border-transparent'
-                        : '',
-                      column.status === 'preparing'
-                        ? 'bg-amber-500 hover:bg-amber-600 text-white border-transparent'
-                        : '',
-                      column.status === 'ready'
-                        ? 'bg-brand hover:bg-brandDark text-white border-transparent'
-                        : '',
-                    ]"
-                    @click="updateOrderStatus(order.orderNumber, column.next)"
+                    @click="updateOrderStatus(order.id, column.next)"
+                    class="w-full rounded-xl py-2.5 text-xs font-bold text-white transition-all shadow-sm hover:shadow active:scale-95"
+                    :class="{
+                      'bg-blue-600 hover:bg-blue-700': column.status === 'new',
+                      'bg-amber-600 hover:bg-amber-700':
+                        column.status === 'preparing',
+                      'bg-emerald-600 hover:bg-emerald-700':
+                        column.status === 'ready',
+                      'bg-green-600 hover:bg-green-700':
+                        column.status === 'completed',
+                    }"
                   >
                     {{ column.action }}
                   </button>
+
+                  <!-- Completed / End State -->
                   <div
                     v-else
-                    class="rounded-xl bg-stone-100 border border-stone-200 py-2 text-center text-xs font-bold text-stone-500 tracking-wide uppercase"
+                    class="rounded-xl py-2 text-center text-xs font-bold uppercase transition-colors"
+                    :class="{
+                      'bg-green-100 text-green-700':
+                        column.status === 'completed',
+                      'bg-stone-100 text-stone-500':
+                        column.status !== 'completed',
+                    }"
                   >
                     {{
                       state.language === "en"
